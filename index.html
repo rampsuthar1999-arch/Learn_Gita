@@ -422,6 +422,31 @@ h1{
 .grade-hard{ border-color:#d98e3d; color:#f5dfc2; }
 .grade-good{ border-color:#5fa88a; color:#cdeee0; }
 .grade-easy{ border-color:#6f9fd8; color:#d3e4f7; }
+/* ---- संख्या-क्रम mode ---- */
+.sk-settings{ text-align:left; margin:-4px 0 12px; border:1px solid var(--line); border-radius:12px; padding:8px 12px; background:var(--panel2); }
+.sk-settings summary{ cursor:pointer; color:var(--gold-soft); font-size:13.5px; list-style:none; }
+.sk-settings summary::-webkit-details-marker{ display:none; }
+.sk-settings[open] summary{ margin-bottom:8px; }
+.sk-settings .duration-pills{ margin-bottom:6px; }
+.sk-note{ font-size:12.5px; color:var(--muted); line-height:1.6; margin:6px 0 10px; }
+.sk-select{ width:100%; padding:10px; margin:4px 0 10px; border-radius:10px; border:1px solid var(--line); background:var(--panel); color:var(--text); font-family:inherit; font-size:14px; }
+.btn.sk-small{ padding:10px 14px; font-size:14px; }
+.sk-chips{ display:flex; flex-wrap:wrap; gap:5px; justify-content:center; margin:6px 0 14px; }
+.sk-chip{ min-width:30px; padding:3px 6px; border-radius:8px; border:1px solid var(--line); color:var(--muted); font-family:'Tiro Devanagari Sanskrit', serif; font-size:14px; }
+.sk-chip.done{ opacity:.45; }
+.sk-chip.miss{ border-color:#c0564b; color:#e08a80; }
+.sk-chip.cur{ background:linear-gradient(135deg,var(--gold),var(--saffron)); color:#1a1408; border-color:transparent; font-weight:700; }
+.sk-row{ display:flex; gap:8px; margin-top:6px; }
+.sk-row .btn{ flex:1; }
+.btn.sk-miss-btn{ border-color:#c0564b; }
+.sk-question{ font-size:20px; color:var(--gold-soft); margin:8px 0 6px; font-family:'Tiro Devanagari Sanskrit', serif; }
+.sk-firstline{ margin-bottom:14px; }
+.sk-input{ width:100%; box-sizing:border-box; text-align:center; font-size:26px; padding:12px; margin-bottom:12px; border-radius:12px; border:1.5px solid var(--line); background:var(--panel2); color:var(--text); font-family:'Tiro Devanagari Sanskrit', serif; outline:none; }
+.sk-input:focus{ border-color:var(--gold); }
+.sk-feedback{ border-radius:10px; padding:10px; margin:4px 0 10px; font-size:16px; }
+.sk-feedback.ok{ background:rgba(76,160,90,.15); color:#8fd19e; border:1px solid rgba(76,160,90,.5); }
+.sk-feedback.bad{ background:rgba(192,86,75,.13); color:#e08a80; border:1px solid rgba(192,86,75,.5); }
+.sk-done-title{ color:var(--gold-soft); margin:8px 0 4px; }
 .srs-counts{
   display:flex; gap:10px; justify-content:center; margin:14px 0 18px; flex-wrap:wrap;
 }
@@ -880,6 +905,7 @@ footer.note{
   <div class="mode-toggle" id="modeToggle">
     <button class="mode-pill" data-mode="random" id="modeRandomBtn">यादृच्छिक</button>
     <button class="mode-pill" data-mode="sequential" id="modeSeqBtn">क्रमबद्ध</button>
+    <button class="mode-pill" data-mode="sankhya" id="modeSankhyaBtn">संख्या-क्रम</button>
     <button class="mode-pill" data-mode="timed" id="modeTimedBtn">समयबद्ध परीक्षा</button>
     <button class="mode-pill" data-mode="srs" id="modeSrsBtn">स्मृति-अभ्यास</button>
     <button class="mode-pill" data-mode="pada" id="modePadaBtn">क्रम जोड़ो</button>
@@ -1109,6 +1135,7 @@ function defaultProgress(){
     streak: { last: '', count: 0 },
     coverage: {},
     srs: { cards: {} },
+    sankhya: null,
     mcqConfig: { difficulty: 'normal', direction: 'verse', optionCount: 4, firstLineOnly: false, timerSeconds: 0, negativeMarking: false }
   };
 }
@@ -1410,7 +1437,7 @@ function updateProgressBar(){
 }
 
 const MODE_BTN_IDS = {
-  random: 'modeRandomBtn', sequential: 'modeSeqBtn', timed: 'modeTimedBtn',
+  random: 'modeRandomBtn', sequential: 'modeSeqBtn', sankhya: 'modeSankhyaBtn', timed: 'modeTimedBtn',
   srs: 'modeSrsBtn', pada: 'modePadaBtn', revision: 'modeRevisionBtn',
   mcq: 'modeMcqBtn', dashboard: 'modeDashBtn', khoj: 'modeKhojBtn', anvaya: 'modeAnvBtn'
 };
@@ -1426,7 +1453,7 @@ function renderCurrent(){
   updateScopeSummary();
   updateHardChip();
   const m = progress.mode;
-  const scopeVisible = ['random','sequential','timed','srs','pada','mcq'].includes(m);
+  const scopeVisible = ['random','sequential','sankhya','timed','srs','pada','mcq'].includes(m);
   document.getElementById('scopeBar').style.display = scopeVisible ? 'flex' : 'none';
   const progVisible = (m === 'random' || m === 'sequential');
   document.getElementById('progressCard').style.display = progVisible ? 'flex' : 'none';
@@ -1438,6 +1465,7 @@ function renderCurrent(){
   document.getElementById('mainCard').style.display = (m === 'khoj' || m === 'anvaya') ? 'none' : '';
   if(m === 'khoj' || m === 'anvaya') return;
   if(m === 'revision'){ renderRevisionFlow(); return; }
+  if(m === 'sankhya'){ renderSankhyaFlow(); return; }
   if(m === 'timed'){ renderTimedFlow(); return; }
   if(m === 'srs'){ renderSrsFlow(); return; }
   if(m === 'pada'){ renderPadaFlow(); return; }
@@ -1596,6 +1624,260 @@ document.getElementById('modeMcqBtn').addEventListener('click', () => switchMode
 document.getElementById('modeDashBtn').addEventListener('click', () => switchMode('dashboard'));
 document.getElementById('modeKhojBtn').addEventListener('click', () => switchMode('khoj'));
 document.getElementById('modeAnvBtn').addEventListener('click', () => switchMode('anvaya'));
+document.getElementById('modeSankhyaBtn').addEventListener('click', () => switchMode('sankhya'));
+
+/* ============ संख्या-क्रम MODE — श्लोक-संख्या का व्यवस्थित अभ्यास ============
+   Chapter by chapter. Within a chapter, pass k (k = 1..gap) asks verses k, k+gap, k+2·gap …
+   so that after `gap` passes every verse has come exactly once. Missed verses come back at
+   the end of the same pass and are added to the "कठिन" list.
+   Directions: 'num'  = number shown → recite the verse (self-graded)
+               'verse'= first line shown → type the verse number (auto-checked)
+               'both' = alternate.                                                        */
+
+const SK_GAPS = [3, 4, 5, 7, 10];
+let skSettingsOpen = false;   // panel open/closed: this session only
+
+function skDefault(){
+  return { gap: 5, dir: 'num', ch: null, pass: 1, pos: 0, retry: [], q: 0, done: {}, miss: {}, phase: 'ask', ans: null };
+}
+function skState(){
+  if(!progress.sankhya) progress.sankhya = skDefault();
+  const s = progress.sankhya;
+  const d = skDefault();
+  Object.keys(d).forEach(k => { if(!(k in s)) s[k] = d[k]; });
+  return s;
+}
+function skChapters(){
+  return [...new Set(effectivePool().map(it => it.c))].sort((a, b) => a - b);
+}
+function skChapterVerses(c){
+  return effectivePool().filter(it => it.c === c).sort((a, b) => a.v - b.v);
+}
+function skPassList(c, pass, gap){
+  return skChapterVerses(c).filter(it => (it.v - 1) % gap === pass - 1);
+}
+function skPassCount(c, gap){
+  // passes that actually contain verses (a short hard-only selection may skip some)
+  const vs = skChapterVerses(c);
+  const n = [];
+  for(let k = 1; k <= gap; k++) if(vs.some(it => (it.v - 1) % gap === k - 1)) n.push(k);
+  return n;
+}
+function skStartChapter(c){
+  const s = skState();
+  s.ch = c; s.pass = skPassCount(c, s.gap)[0] || 1; s.pos = 0; s.retry = [];
+  s.done = {}; s.miss = {}; s.phase = 'ask'; s.ans = null;
+  saveProgress();
+}
+function skEnsure(){
+  const s = skState();
+  const chs = skChapters();
+  if(chs.length === 0) return false;
+  if(s.ch === null || !chs.includes(s.ch)) skStartChapter(chs[0]);
+  return true;
+}
+// the verse to ask now, or null when the chapter is finished (passes advance here)
+function skCurrent(){
+  const s = skState();
+  for(let guard = 0; guard < 20; guard++){
+    const list = skPassList(s.ch, s.pass, s.gap);
+    if(s.pos < list.length) return { item: list[s.pos], retry: false };
+    const r = s.retry.map(findByKey).filter(Boolean);
+    if(r.length) return { item: r[0], retry: true };
+    const passes = skPassCount(s.ch, s.gap);
+    const nxt = passes.find(k => k > s.pass);
+    if(!nxt) return null;
+    s.pass = nxt; s.pos = 0; s.retry = [];
+    saveProgress();
+  }
+  return null;
+}
+function skDirFor(){
+  const s = skState();
+  if(s.dir === 'both') return (s.q % 2 === 0) ? 'num' : 'verse';
+  return s.dir;
+}
+function skGrade(cur, ok){
+  const s = skState();
+  const key = keyOf(cur.item);
+  if(cur.retry) s.retry.shift(); else s.pos += 1;
+  if(ok){
+    s.done[key] = 1;
+  } else {
+    s.miss[key] = (s.miss[key] || 0) + 1;
+    s.retry.push(key);                       // ask again at the end of this pass
+    if(!isHard(key)){ progress.hardVerses.push(key); updateHardChip(); }
+  }
+  s.q += 1; s.phase = 'ask'; s.ans = null;
+  markActivity();
+  recordCoverage(cur.item);
+  saveProgress();
+}
+
+function skPassChips(){
+  const s = skState();
+  const list = skPassList(s.ch, s.pass, s.gap);
+  return list.map((it, i) => {
+    const key = keyOf(it);
+    let cls = 'sk-chip';
+    if(i === s.pos) cls += ' cur';
+    else if(s.miss[key] && !s.done[key]) cls += ' miss';
+    else if(i < s.pos) cls += ' done';
+    return `<span class="${cls}">${toDevanagariNum(it.v)}</span>`;
+  }).join('');
+}
+
+function skSettingsHtml(){
+  const s = skState();
+  const gp = g => `<button class="duration-pill ${s.gap === g ? 'active' : ''}" data-skgap="${g}">${toDevanagariNum(g)}</button>`;
+  const dp = (v, l) => `<button class="duration-pill ${s.dir === v ? 'active' : ''}" data-skdir="${v}">${l}</button>`;
+  const opts = skChapters().map(c => `<option value="${c}" ${c === s.ch ? 'selected' : ''}>अध्याय ${toDevanagariNum(c)} — ${CHAPTER_TITLES[c] || ''}</option>`).join('');
+  return `
+    <details class="sk-settings" id="skSettings">
+      <summary>⚙ सेटिंग — अंतर ${toDevanagariNum(s.gap)} · ${s.dir === 'num' ? 'संख्या → श्लोक' : s.dir === 'verse' ? 'श्लोक → संख्या' : 'बारी-बारी'}</summary>
+      <div class="mcq-diff-label">श्लोकों के बीच अंतर (चक्र)</div>
+      <div class="duration-pills">${SK_GAPS.map(gp).join('')}</div>
+      <div class="sk-note">अंतर ${toDevanagariNum(s.gap)}: चक्र १ में १, ${toDevanagariNum(1 + s.gap)}, ${toDevanagariNum(1 + 2 * s.gap)} …; चक्र २ में २, ${toDevanagariNum(2 + s.gap)}, ${toDevanagariNum(2 + 2 * s.gap)} … — ${toDevanagariNum(s.gap)} चक्रों में हर श्लोक एक बार।</div>
+      <div class="mcq-diff-label">अभ्यास की दिशा</div>
+      <div class="duration-pills">${dp('num', 'संख्या → श्लोक')}${dp('verse', 'श्लोक → संख्या')}${dp('both', 'बारी-बारी')}</div>
+      <div class="mcq-diff-label">अध्याय पर जाएँ</div>
+      <select class="sk-select" id="skChSel">${opts}</select>
+      <button class="btn btn-secondary sk-small" id="skRestartBtn">इस अध्याय को फिर से आरम्भ करें</button>
+    </details>`;
+}
+
+function skWireSettings(){
+  const s = skState();
+  const det = document.getElementById('skSettings');
+  if(det && skSettingsOpen) det.open = true;
+  if(det) det.addEventListener('toggle', () => { skSettingsOpen = det.open; });
+  document.querySelectorAll('[data-skgap]').forEach(b => b.addEventListener('click', () => {
+    const g = parseInt(b.dataset.skgap);
+    if(g === s.gap) return;
+    s.gap = g; skStartChapter(s.ch); renderSankhyaFlow();
+  }));
+  document.querySelectorAll('[data-skdir]').forEach(b => b.addEventListener('click', () => {
+    s.dir = b.dataset.skdir; s.phase = 'ask'; s.ans = null; saveProgress(); renderSankhyaFlow();
+  }));
+  const sel = document.getElementById('skChSel');
+  if(sel) sel.addEventListener('change', () => { skStartChapter(parseInt(sel.value)); renderSankhyaFlow(); });
+  const rb = document.getElementById('skRestartBtn');
+  if(rb) rb.addEventListener('click', () => showConfirmModal('इस अध्याय का संख्या-क्रम अभ्यास पहले चक्र से फिर आरम्भ होगा।',
+    () => { skStartChapter(s.ch); renderSankhyaFlow(); }));
+}
+
+function skParseNum(t){
+  const d = String(t || '').replace(/[०-९]/g, ch => '०१२३४५६७८९'.indexOf(ch)).replace(/[^0-9]/g, '');
+  return d ? parseInt(d) : null;
+}
+
+function renderSankhyaFlow(){
+  const card = document.getElementById('mainCard');
+  if(!skEnsure()){
+    card.innerHTML = `<div class="prompt-eyebrow">संख्या-क्रम</div><div class="recall-hint">चयनित अध्यायों में कोई श्लोक नहीं है।</div>`;
+    return;
+  }
+  const s = skState();
+  const cur = skCurrent();
+  if(!cur){ renderSankhyaChapterDone(); return; }
+  const item = cur.item;
+  const passes = skPassCount(s.ch, s.gap);
+  const list = skPassList(s.ch, s.pass, s.gap);
+  const passNo = passes.indexOf(s.pass) + 1;
+  const where = cur.retry
+    ? `दोहराव · शेष ${toDevanagariNum(s.retry.length)}`
+    : `${toDevanagariNum(s.pos + 1)}/${toDevanagariNum(list.length)}`;
+  const head = `
+    ${skSettingsHtml()}
+    <div class="prompt-eyebrow">संख्या-क्रम · अध्याय ${toDevanagariNum(s.ch)} · चक्र ${toDevanagariNum(passNo)}/${toDevanagariNum(passes.length)} · ${where}</div>
+    <div class="sk-chips">${skPassChips()}</div>`;
+  const dir = s.phase === 'ask' ? skDirFor() : s.ansDir;
+  s.ansDir = dir;
+
+  if(dir === 'num'){
+    if(s.phase === 'ask'){
+      card.innerHTML = head + `
+        <div class="chapter-title">अध्याय ${toDevanagariNum(item.c)} — ${item.ct}</div>
+        <div class="verse-ref">श्लोक ${toDevanagariNum(item.v)}<span class="small">इस संख्या का श्लोक सुनाइए</span></div>
+        <div class="hint-line" id="hintLine"></div>
+        <div class="recall-hint">मन में या बोलकर श्लोक सुनाएँ, फिर मिलान करें।</div>
+        <button class="btn btn-primary" id="skShowBtn">श्लोक दिखाएँ</button>
+        <button class="btn btn-secondary" id="hintBtn">संकेत देखें</button>`;
+      document.getElementById('skShowBtn').addEventListener('click', () => { s.phase = 'shown'; saveProgress(); renderSankhyaFlow(); });
+      wireHintButton(item);
+    } else {
+      const sp = item.sp ? `<div class="divider-speaker">${item.sp}</div>` : '';
+      card.innerHTML = head + `
+        <div class="answer-meta">अध्याय ${toDevanagariNum(item.c)} · श्लोक ${toDevanagariNum(item.v)}</div>
+        ${sp}
+        <div class="shloka-text">${item.t}</div>
+        <div class="sk-row">
+          <button class="btn btn-primary" id="skOkBtn">✓ याद था</button>
+          <button class="btn btn-secondary sk-miss-btn" id="skMissBtn">✗ नहीं याद था</button>
+        </div>`;
+      document.getElementById('skOkBtn').addEventListener('click', () => { skGrade(cur, true); renderSankhyaFlow(); });
+      document.getElementById('skMissBtn').addEventListener('click', () => { skGrade(cur, false); renderSankhyaFlow(); });
+    }
+  } else {
+    if(s.phase === 'ask'){
+      card.innerHTML = head + `
+        <div class="chapter-title">अध्याय ${toDevanagariNum(item.c)} — ${item.ct}</div>
+        <div class="sk-question">यह कौन-सा श्लोक है?</div>
+        <div class="shloka-text sk-firstline">${firstLineOf(item.t)} …</div>
+        <input class="sk-input" id="skNumIn" type="text" inputmode="numeric" autocomplete="off" placeholder="श्लोक संख्या लिखें">
+        <button class="btn btn-primary" id="skCheckBtn">जाँचें</button>
+        <button class="btn btn-secondary" id="skDunnoBtn">पता नहीं — उत्तर दिखाएँ</button>`;
+      const inp = document.getElementById('skNumIn');
+      const check = () => {
+        const n = skParseNum(inp.value);
+        if(n === null){ inp.focus(); return; }
+        s.ans = n; s.phase = 'shown'; saveProgress(); renderSankhyaFlow();
+      };
+      document.getElementById('skCheckBtn').addEventListener('click', check);
+      inp.addEventListener('keydown', e => { if(e.key === 'Enter') check(); });
+      document.getElementById('skDunnoBtn').addEventListener('click', () => { s.ans = -1; s.phase = 'shown'; saveProgress(); renderSankhyaFlow(); });
+      setTimeout(() => inp.focus(), 50);
+    } else {
+      const ok = s.ans === item.v;
+      const msg = ok ? `<div class="sk-feedback ok">✓ सही — श्लोक ${toDevanagariNum(item.v)}</div>`
+        : `<div class="sk-feedback bad">${s.ans > 0 ? '✗ आपका उत्तर ' + toDevanagariNum(s.ans) + ' — ' : ''}सही संख्या: श्लोक ${toDevanagariNum(item.v)}</div>`;
+      card.innerHTML = head + msg + `
+        <div class="answer-meta">अध्याय ${toDevanagariNum(item.c)} · श्लोक ${toDevanagariNum(item.v)}</div>
+        <div class="shloka-text">${item.t}</div>
+        <button class="btn btn-primary" id="skNextBtn">अगला</button>`;
+      document.getElementById('skNextBtn').addEventListener('click', () => { skGrade(cur, ok); renderSankhyaFlow(); });
+    }
+  }
+  skWireSettings();
+}
+
+function renderSankhyaChapterDone(){
+  const s = skState();
+  const card = document.getElementById('mainCard');
+  const total = skChapterVerses(s.ch).length;
+  const missed = Object.keys(s.miss).length;
+  const chs = skChapters();
+  const next = chs.find(c => c > s.ch);
+  card.innerHTML = skSettingsHtml() + `
+    <div class="prompt-eyebrow">संख्या-क्रम</div>
+    <h2 class="sk-done-title">अध्याय ${toDevanagariNum(s.ch)} पूर्ण हुआ!</h2>
+    <div class="srs-counts">
+      <div class="result-stat"><span class="stat-value">${toDevanagariNum(total)}</span><span class="stat-label">श्लोक</span></div>
+      <div class="result-stat"><span class="stat-value">${toDevanagariNum(total - missed)}</span><span class="stat-label">पहली बार में सही</span></div>
+      <div class="result-stat"><span class="stat-value">${toDevanagariNum(missed)}</span><span class="stat-label">दोहराने पड़े</span></div>
+    </div>
+    ${missed ? `<div class="sk-note">दोहराए गए श्लोक: ${Object.keys(s.miss).map(k => toDevanagariNum(k.split('-')[1])).join(', ')} — ये "कठिन" सूची में हैं।</div>` : ''}
+    ${next ? `<button class="btn btn-primary" id="skNextChBtn">अगला अध्याय (${toDevanagariNum(next)}) आरम्भ करें</button>`
+           : `<div class="recall-hint">चयनित सभी अध्याय पूरे हुए। 🙏</div><button class="btn btn-primary" id="skFirstChBtn">फिर से अध्याय ${toDevanagariNum(chs[0])} से आरम्भ करें</button>`}
+    <button class="btn btn-secondary" id="skAgainBtn">यही अध्याय फिर से करें</button>`;
+  const nb = document.getElementById('skNextChBtn');
+  if(nb) nb.addEventListener('click', () => { skStartChapter(next); renderSankhyaFlow(); });
+  const fb = document.getElementById('skFirstChBtn');
+  if(fb) fb.addEventListener('click', () => { skStartChapter(chs[0]); renderSankhyaFlow(); });
+  document.getElementById('skAgainBtn').addEventListener('click', () => { skStartChapter(s.ch); renderSankhyaFlow(); });
+  skWireSettings();
+}
+
 
 /* ============ TIMED TEST MODE ("समयबद्ध परीक्षा") ============ */
 
