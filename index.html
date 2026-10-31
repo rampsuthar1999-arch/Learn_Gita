@@ -793,6 +793,18 @@ header.top .util-btn{ padding:4px 11px; font-size:13px; }
 .sk-chips{ margin:2px 0 8px; gap:4px; }
 .sk-chip{ font-size:13px; padding:2px 5px; min-width:26px; }
 .hint-line{ margin:4px 0 2px; }
+
+/* संख्या-क्रम: उत्तर के साथ पद-अन्वय */
+.sk-anv{ text-align:left; margin:10px 0 4px; }
+.sk-anv .pa-sec{ margin:10px 2px 6px; }
+.sk-anv-note{ font-size:12px; color:var(--muted); margin:-2px 2px 6px; }
+.sk-anv-text{ font-family:'Tiro Devanagari Sanskrit', serif; font-size:calc(16px * var(--fscale,1)); line-height:1.8; color:var(--gold-soft); padding:0 2px; }
+.sk-anv-arth{ font-family:'Tiro Devanagari Hindi','Tiro Devanagari Sanskrit', serif; font-size:calc(16px * var(--fscale,1)); line-height:1.8; color:var(--text); padding:0 2px; }
+.sk-anv-none{ font-size:13px; color:var(--muted); padding:0 2px; }
+.sk-anv-det{ margin-top:10px; }
+.sk-anv-det summary{ cursor:pointer; font-size:13px; color:var(--gold-soft); margin-bottom:6px; }
+.sk-anv-src{ font-size:11px; color:var(--muted); margin-top:8px; }
+.sk-actions{ position:sticky; bottom:-14px; margin:10px -14px -14px; padding:10px 14px 14px; background:var(--panel); border-top:1px solid var(--line); z-index:2; }
 </style>
 <style id="kjStyle">
 /* ===== शब्द-खोज (concordance) — scoped under #khojRoot ===== */
@@ -1640,7 +1652,7 @@ const SK_GAPS = [3, 4, 5, 7, 10];
 let skSettingsOpen = false;   // panel open/closed: this session only
 
 function skDefault(){
-  return { gap: 5, dir: 'num', ch: null, pass: 1, pos: 0, retry: [], q: 0, done: {}, miss: {}, phase: 'ask', ans: null };
+  return { gap: 5, dir: 'num', anv: true, ch: null, pass: 1, pos: 0, retry: [], q: 0, done: {}, miss: {}, phase: 'ask', ans: null };
 }
 function skState(){
   if(!progress.sankhya) progress.sankhya = skDefault();
@@ -1742,6 +1754,8 @@ function skSettingsHtml(){
       <div class="sk-note">अंतर ${toDevanagariNum(s.gap)}: चक्र १ में १, ${toDevanagariNum(1 + s.gap)}, ${toDevanagariNum(1 + 2 * s.gap)} …; चक्र २ में २, ${toDevanagariNum(2 + s.gap)}, ${toDevanagariNum(2 + 2 * s.gap)} … — ${toDevanagariNum(s.gap)} चक्रों में हर श्लोक एक बार।</div>
       <div class="mcq-diff-label">अभ्यास की दिशा</div>
       <div class="duration-pills">${dp('num', 'संख्या → श्लोक')}${dp('verse', 'श्लोक → संख्या')}${dp('both', 'बारी-बारी')}</div>
+      <div class="mcq-diff-label">उत्तर के साथ पद-अन्वय व अर्थ</div>
+      <div class="duration-pills"><button class="duration-pill ${s.anv ? 'active' : ''}" data-skanv="1">दिखाएँ</button><button class="duration-pill ${!s.anv ? 'active' : ''}" data-skanv="0">छिपाएँ</button></div>
       <div class="mcq-diff-label">अध्याय पर जाएँ</div>
       <select class="sk-select" id="skChSel">${opts}</select>
       <button class="btn btn-secondary sk-small" id="skRestartBtn">इस अध्याय को फिर से आरम्भ करें</button>
@@ -1761,11 +1775,19 @@ function skWireSettings(){
   document.querySelectorAll('[data-skdir]').forEach(b => b.addEventListener('click', () => {
     s.dir = b.dataset.skdir; s.phase = 'ask'; s.ans = null; saveProgress(); renderSankhyaFlow();
   }));
+  document.querySelectorAll('[data-skanv]').forEach(b => b.addEventListener('click', () => {
+    s.anv = b.dataset.skanv === '1'; saveProgress(); renderSankhyaFlow();
+  }));
   const sel = document.getElementById('skChSel');
   if(sel) sel.addEventListener('change', () => { skStartChapter(parseInt(sel.value)); renderSankhyaFlow(); });
   const rb = document.getElementById('skRestartBtn');
   if(rb) rb.addEventListener('click', () => showConfirmModal('इस अध्याय का संख्या-क्रम अभ्यास पहले चक्र से फिर आरम्भ होगा।',
     () => { skStartChapter(s.ch); renderSankhyaFlow(); }));
+}
+
+function skAnvayaHtml(item){
+  if(!skState().anv || typeof window.anvayaHtmlFor !== 'function') return '';
+  return window.anvayaHtmlFor(item.c, item.v);
 }
 
 function skParseNum(t){
@@ -1775,6 +1797,7 @@ function skParseNum(t){
 
 function renderSankhyaFlow(){
   const card = document.getElementById('mainCard');
+  card.scrollTop = 0;
   if(!skEnsure()){
     card.innerHTML = `<div class="prompt-eyebrow">संख्या-क्रम</div><div class="recall-hint">चयनित अध्यायों में कोई श्लोक नहीं है।</div>`;
     return;
@@ -1813,7 +1836,8 @@ function renderSankhyaFlow(){
         <div class="answer-meta">अध्याय ${toDevanagariNum(item.c)} · श्लोक ${toDevanagariNum(item.v)}</div>
         ${sp}
         <div class="shloka-text">${item.t}</div>
-        <div class="sk-row">
+        ${skAnvayaHtml(item)}
+        <div class="sk-row sk-actions">
           <button class="btn btn-primary" id="skOkBtn">✓ याद था</button>
           <button class="btn btn-secondary sk-miss-btn" id="skMissBtn">✗ नहीं याद था</button>
         </div>`;
@@ -1846,7 +1870,8 @@ function renderSankhyaFlow(){
       card.innerHTML = head + msg + `
         <div class="answer-meta">अध्याय ${toDevanagariNum(item.c)} · श्लोक ${toDevanagariNum(item.v)}</div>
         <div class="shloka-text">${item.t}</div>
-        <button class="btn btn-primary" id="skNextBtn">अगला</button>`;
+        ${skAnvayaHtml(item)}
+        <div class="sk-actions"><button class="btn btn-primary" id="skNextBtn">अगला</button></div>`;
       document.getElementById('skNextBtn').addEventListener('click', () => { skGrade(cur, ok); renderSankhyaFlow(); });
     }
   }
@@ -2774,6 +2799,30 @@ if('serviceWorker' in navigator){
     else { const i = CHS.indexOf(curCh); if (i < CHS.length-1){ curCh = CHS[i+1]; curIdx = 0; fillCh(); } }
     render(); window.scrollTo(0,0);
   });
+
+  /* संख्या-क्रम उत्तर-स्क्रीन के लिए: किसी श्लोक (GITA की गिनती में) का पद-अन्वय, अर्थ व शब्दशः तालिका */
+  window.anvayaHtmlFor = function(c, v){
+    const vn = v - shift(c);
+    const gi = (BY_CH[c] || []).find(i => ANV[i].v.includes(vn));
+    if (gi === undefined) return '';
+    const g = ANV[gi];
+    const ps = g.p.filter(pr => pr[0]);
+    if (!ps.length) return '<div class="sk-anv"><div class="pa-sec">पद-अन्वय</div><div class="sk-anv-none">इस श्लोक का पद-अन्वय उपलब्ध नहीं है।</div></div>';
+    const joint = g.v.length > 1 ? '<div class="sk-anv-note">श्लोक ' + label(g) + ' का संयुक्त अन्वय</div>' : '';
+    const anv = ps.map(pr => esc(pr[0])).join(' ');
+    const arth = ps.map(pr => pr[1]).filter(m => m && m !== '*')
+      .concat((g.x || []).map(p => p[1]).filter(Boolean)).map(esc).join(' ');
+    let rows = '';
+    for (const pr of ps){
+      const m = pr[1] && pr[1] !== '*' ? pr[1] : '';
+      rows += '<div class="pa-row"><div class="pa-p">' + esc(pr[0]) + '</div><div class="pa-m' + (m ? '' : ' pa-none') + '">' + (m ? esc(m) : '—') + '</div></div>';
+    }
+    return '<div class="sk-anv"><div class="pa-sec">पद-अन्वय</div>' + joint
+      + '<div class="sk-anv-text">' + anv + '</div>'
+      + '<div class="pa-sec">शब्दार्थ (अन्वय-क्रम से)</div><div class="sk-anv-arth">' + arth + '</div>'
+      + '<details class="sk-anv-det"><summary>शब्दशः अर्थ — तालिका</summary><div class="pa-tbl">' + rows + '</div></details>'
+      + '<div class="sk-anv-src">स्रोत: गीताप्रेस — पदच्छेद, अन्वय और भाषाटीकासहित</div></div>';
+  };
 
   fillCh(); render();
 })();
