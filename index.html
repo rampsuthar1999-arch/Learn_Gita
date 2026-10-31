@@ -880,19 +880,10 @@ footer.note{
   </div>
 
   <div class="util-bar">
-    <div class="streak-chip" id="streakChip">🔥 ०</div>
-    <button class="util-btn" id="dailyVerseBtn">आज का श्लोक</button>
     <div class="font-controls">
       <button class="util-btn" id="fontMinusBtn">अ−</button>
       <button class="util-btn" id="fontPlusBtn">अ+</button>
     </div>
-  </div>
-
-  <div class="daily-card" id="dailyVerseCard">
-    <div class="daily-title">आज का श्लोक</div>
-    <div class="daily-meta" id="dailyVerseMeta"></div>
-    <div class="divider-speaker" id="dailyVerseSpeaker"></div>
-    <div class="shloka-text" id="dailyVerseText"></div>
   </div>
 
   <div class="scope-bar" id="scopeBar">
@@ -906,20 +897,13 @@ footer.note{
     <button class="mode-pill" data-mode="random" id="modeRandomBtn">यादृच्छिक</button>
     <button class="mode-pill" data-mode="sequential" id="modeSeqBtn">क्रमबद्ध</button>
     <button class="mode-pill" data-mode="sankhya" id="modeSankhyaBtn">संख्या-क्रम</button>
-    <button class="mode-pill" data-mode="timed" id="modeTimedBtn">समयबद्ध परीक्षा</button>
     <button class="mode-pill" data-mode="srs" id="modeSrsBtn">स्मृति-अभ्यास</button>
-    <button class="mode-pill" data-mode="pada" id="modePadaBtn">क्रम जोड़ो</button>
     <button class="mode-pill" data-mode="revision" id="modeRevisionBtn">पुनरावलोकन</button>
-    <button class="mode-pill" data-mode="mcq" id="modeMcqBtn">बहुविकल्पीय</button>
     <button class="mode-pill" data-mode="khoj" id="modeKhojBtn">शब्द-खोज</button>
     <button class="mode-pill" data-mode="anvaya" id="modeAnvBtn">पद-अन्वय</button>
     <button class="mode-pill" data-mode="dashboard" id="modeDashBtn">प्रगति</button>
   </div>
 
-  <div class="timer-topbar" id="timerTopbar">
-    <span id="timerTopbarLabel">शेष समय</span>
-    <span class="timer-value" id="timerTopbarValue">00:00</span>
-  </div>
 
   <div class="card" id="mainCard">
     <!-- populated by JS -->
@@ -1168,6 +1152,7 @@ function loadProgress(){
     if(!parsed.coverage) parsed.coverage = {};
     if(!parsed.srs) parsed.srs = { cards: {} };
     if(parsed.mode === 'search') parsed.mode = 'random';
+    if(['timed','mcq','pada'].includes(parsed.mode)) parsed.mode = 'sankhya';
     if(!parsed.mcqConfig){
       parsed.mcqConfig = { difficulty: (parsed.mcqDifficulty || 'normal'), direction: 'verse', optionCount: 4, firstLineOnly: false, timerSeconds: 0, negativeMarking: false };
     }
@@ -1330,8 +1315,6 @@ function applyScopeSelection(){
   progress.random = { tested: [], round: 1, pending: null };
   progress.sequential = { position: 0, round: 1 };
   srsSession = null;
-  padaState = null;
-  mcqState = null;
   saveProgress();
   updateScopeSummary();
   closeScopeModal();
@@ -1437,9 +1420,9 @@ function updateProgressBar(){
 }
 
 const MODE_BTN_IDS = {
-  random: 'modeRandomBtn', sequential: 'modeSeqBtn', sankhya: 'modeSankhyaBtn', timed: 'modeTimedBtn',
-  srs: 'modeSrsBtn', pada: 'modePadaBtn', revision: 'modeRevisionBtn',
-  mcq: 'modeMcqBtn', dashboard: 'modeDashBtn', khoj: 'modeKhojBtn', anvaya: 'modeAnvBtn'
+  random: 'modeRandomBtn', sequential: 'modeSeqBtn', sankhya: 'modeSankhyaBtn',
+  srs: 'modeSrsBtn', revision: 'modeRevisionBtn',
+  dashboard: 'modeDashBtn', khoj: 'modeKhojBtn', anvaya: 'modeAnvBtn'
 };
 
 function updateModePills(){
@@ -1453,11 +1436,10 @@ function renderCurrent(){
   updateScopeSummary();
   updateHardChip();
   const m = progress.mode;
-  const scopeVisible = ['random','sequential','sankhya','timed','srs','pada','mcq'].includes(m);
+  const scopeVisible = ['random','sequential','sankhya','srs'].includes(m);
   document.getElementById('scopeBar').style.display = scopeVisible ? 'flex' : 'none';
   const progVisible = (m === 'random' || m === 'sequential');
   document.getElementById('progressCard').style.display = progVisible ? 'flex' : 'none';
-  if(m !== 'timed') hideTimerTopbar();
   const kjRoot = document.getElementById('khojRoot');
   if(kjRoot) kjRoot.style.display = (m === 'khoj') ? 'block' : 'none';
   const paRoot = document.getElementById('anvayaRoot');
@@ -1466,10 +1448,7 @@ function renderCurrent(){
   if(m === 'khoj' || m === 'anvaya') return;
   if(m === 'revision'){ renderRevisionFlow(); return; }
   if(m === 'sankhya'){ renderSankhyaFlow(); return; }
-  if(m === 'timed'){ renderTimedFlow(); return; }
   if(m === 'srs'){ renderSrsFlow(); return; }
-  if(m === 'pada'){ renderPadaFlow(); return; }
-  if(m === 'mcq'){ renderMcqFlow(); return; }
   if(m === 'dashboard'){ renderDashboard(); return; }
   updateProgressBar();
   const item = currentItem();
@@ -1607,8 +1586,6 @@ function resetCurrentModeProgress(){
 
 function switchMode(mode){
   if(progress.mode === mode) return;
-  if(progress.mode === 'timed') stopTimedInterval();
-  if(progress.mode === 'mcq') stopMcqTimer();
   progress.mode = mode;
   saveProgress();
   renderCurrent();
@@ -1616,11 +1593,8 @@ function switchMode(mode){
 
 document.getElementById('modeRandomBtn').addEventListener('click', () => switchMode('random'));
 document.getElementById('modeSeqBtn').addEventListener('click', () => switchMode('sequential'));
-document.getElementById('modeTimedBtn').addEventListener('click', () => switchMode('timed'));
 document.getElementById('modeRevisionBtn').addEventListener('click', () => switchMode('revision'));
 document.getElementById('modeSrsBtn').addEventListener('click', () => switchMode('srs'));
-document.getElementById('modePadaBtn').addEventListener('click', () => switchMode('pada'));
-document.getElementById('modeMcqBtn').addEventListener('click', () => switchMode('mcq'));
 document.getElementById('modeDashBtn').addEventListener('click', () => switchMode('dashboard'));
 document.getElementById('modeKhojBtn').addEventListener('click', () => switchMode('khoj'));
 document.getElementById('modeAnvBtn').addEventListener('click', () => switchMode('anvaya'));
@@ -1634,6 +1608,7 @@ document.getElementById('modeSankhyaBtn').addEventListener('click', () => switch
                'verse'= first line shown → type the verse number (auto-checked)
                'both' = alternate.                                                        */
 
+function firstLineOf(t){ return t.split('\n')[0]; }
 const SK_GAPS = [3, 4, 5, 7, 10];
 let skSettingsOpen = false;   // panel open/closed: this session only
 
@@ -1879,515 +1854,6 @@ function renderSankhyaChapterDone(){
 }
 
 
-/* ============ TIMED TEST MODE ("समयबद्ध परीक्षा") ============ */
-
-// transient, in-memory only (not persisted across full page reloads)
-let timedState = null; // {phase:'setup'|'running'|'result', style, pool:[], sessionTested:Set, cursor, verseDeadlineAt, sessionEndAt, promptShownAt, results:{...}}
-let timedIntervalId = null;
-
-function formatMMSS(ms){
-  const totalSec = Math.max(0, Math.ceil(ms/1000));
-  const m = Math.floor(totalSec/60);
-  const s = totalSec % 60;
-  return String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
-}
-
-function stopTimedInterval(){
-  if(timedIntervalId){
-    clearInterval(timedIntervalId);
-    timedIntervalId = null;
-  }
-}
-
-function hideTimerTopbar(){
-  document.getElementById('timerTopbar').classList.remove('show');
-}
-
-function showTimerTopbar(label, valueText, low){
-  const bar = document.getElementById('timerTopbar');
-  bar.classList.add('show');
-  document.getElementById('timerTopbarLabel').textContent = label;
-  const valEl = document.getElementById('timerTopbarValue');
-  valEl.textContent = valueText;
-  valEl.classList.toggle('low', !!low);
-}
-
-function timedScopedPool(excludeKeys){
-  const ex = new Set(excludeKeys);
-  return effectivePool().filter(item => !ex.has(keyOf(item)));
-}
-
-function renderTimedFlow(){
-  if(!timedState || timedState.phase === 'setup'){
-    hideTimerTopbar();
-    renderTimedSetup();
-    return;
-  }
-  if(timedState.phase === 'running'){
-    ensureTimedIntervalRunning();
-    if(timedState.style === 'countdown') resumeCountdownRunning();
-    else if(timedState.style === 'session') resumeSessionRunning();
-    else resumeMeasureRunning();
-    timedTick(); // populate timer display immediately, don't wait for first interval fire
-    return;
-  }
-  if(timedState.phase === 'result'){
-    hideTimerTopbar();
-    renderTimedResults();
-  }
-}
-
-function ensureTimedIntervalRunning(){
-  if(!timedIntervalId){
-    timedIntervalId = setInterval(timedTick, 250);
-  }
-}
-
-/* ---- Setup screen ---- */
-
-function renderTimedSetup(){
-  const cfg = progress.timedConfig;
-  const card = document.getElementById('mainCard');
-  card.innerHTML = `
-    <div class="prompt-eyebrow">समयबद्ध परीक्षा · सेटअप</div>
-    <div class="chapter-title" style="margin-bottom:14px;">परीक्षा की शैली चुनें</div>
-    <div class="setup-style-grid" id="styleGrid">
-      <div class="setup-style-card" data-style="countdown">
-        <div class="style-title">प्रति श्लोक उलटी गिनती</div>
-        <div class="style-desc">प्रत्येक श्लोक के लिए निश्चित समय — समय समाप्त होने पर उत्तर अपने आप दिख जाएगा।</div>
-      </div>
-      <div class="setup-style-card" data-style="session">
-        <div class="style-title">सत्र चुनौती</div>
-        <div class="style-desc">कुल निश्चित समय में अधिकतम श्लोक पूर्ण करने का प्रयास करें — प्रति श्लोक कोई समय-सीमा नहीं।</div>
-      </div>
-      <div class="setup-style-card" data-style="measure">
-        <div class="style-title">समय-मापन (बिना दबाव)</div>
-        <div class="style-desc">कोई समय-सीमा नहीं — बस प्रत्येक श्लोक में लगने वाला समय मापा और दिखाया जाएगा।</div>
-      </div>
-    </div>
-    <div id="durationSection"></div>
-    <div class="chapter-title" style="margin-top:16px;">श्लोक किस क्रम में आएँ?</div>
-    <div class="duration-pills" id="orderPills">
-      <button class="duration-pill ${cfg.order==='random'?'active':''}" data-order="random">यादृच्छिक</button>
-      <button class="duration-pill ${cfg.order==='sequential'?'active':''}" data-order="sequential">क्रमबद्ध</button>
-    </div>
-    <button class="btn btn-primary" id="startTimedBtn" style="margin-top:14px;">परीक्षा प्रारम्भ करें</button>
-  `;
-
-  document.querySelectorAll('#orderPills .duration-pill').forEach(btn => {
-    btn.addEventListener('click', () => {
-      cfg.order = btn.getAttribute('data-order');
-      saveProgress();
-      document.querySelectorAll('#orderPills .duration-pill').forEach(b => {
-        b.classList.toggle('active', b.getAttribute('data-order') === cfg.order);
-      });
-    });
-  });
-
-  function renderDurationSection(){
-    const wrap = document.getElementById('durationSection');
-    if(cfg.style === 'countdown'){
-      const opts = [10,15,20,30];
-      wrap.innerHTML = `
-        <div class="chapter-title" style="margin-top:4px;">प्रति श्लोक समय</div>
-        <div class="duration-pills" id="durPills">
-          ${opts.map(s => `<button class="duration-pill ${cfg.perShlokaSeconds===s?'active':''}" data-sec="${s}">${s} सेकंड</button>`).join('')}
-        </div>
-      `;
-      wrap.querySelectorAll('.duration-pill').forEach(btn => {
-        btn.addEventListener('click', () => {
-          cfg.perShlokaSeconds = parseInt(btn.getAttribute('data-sec'));
-          saveProgress();
-          renderDurationSection();
-        });
-      });
-    } else if(cfg.style === 'session'){
-      const opts = [2,5,10,15];
-      const isCustom = !opts.includes(cfg.sessionMinutes);
-      const customLabel = isCustom ? `अपना समय: ${toDevanagariNum(cfg.sessionMinutes)} मिनट` : 'अपना समय सेट करें';
-      wrap.innerHTML = `
-        <div class="chapter-title" style="margin-top:4px;">कुल सत्र अवधि</div>
-        <div class="duration-pills" id="durPills">
-          ${opts.map(m => `<button class="duration-pill ${cfg.sessionMinutes===m?'active':''}" data-min="${m}">${m} मिनट</button>`).join('')}
-          <button class="duration-pill ${isCustom?'active':''}" id="customDurBtn">${customLabel}</button>
-        </div>
-        <div id="customDurInputWrap" style="display:none; margin-top:12px;">
-          <input type="number" id="customDurInput" class="custom-duration-input" min="1" max="300" placeholder="मिनट में समय लिखें (जैसे 30)" value="${isCustom ? cfg.sessionMinutes : ''}">
-          <button class="btn btn-primary" id="customDurApplyBtn" style="margin-top:10px;">लागू करें</button>
-        </div>
-      `;
-      wrap.querySelectorAll('.duration-pill[data-min]').forEach(btn => {
-        btn.addEventListener('click', () => {
-          cfg.sessionMinutes = parseInt(btn.getAttribute('data-min'));
-          saveProgress();
-          renderDurationSection();
-        });
-      });
-      const customBtn = document.getElementById('customDurBtn');
-      const customInputWrap = document.getElementById('customDurInputWrap');
-      customBtn.addEventListener('click', () => {
-        const showing = customInputWrap.style.display !== 'none';
-        customInputWrap.style.display = showing ? 'none' : 'block';
-        if(!showing) document.getElementById('customDurInput').focus();
-      });
-      const applyCustom = () => {
-        const val = parseInt(document.getElementById('customDurInput').value);
-        if(!val || val < 1 || val > 300){
-          showInfoModal('कृपया 1 से 300 के बीच मिनटों की संख्या दर्ज करें।');
-          return;
-        }
-        cfg.sessionMinutes = val;
-        saveProgress();
-        renderDurationSection();
-      };
-      document.getElementById('customDurApplyBtn').addEventListener('click', applyCustom);
-      document.getElementById('customDurInput').addEventListener('keydown', (e) => {
-        if(e.key === 'Enter') applyCustom();
-      });
-    } else {
-      wrap.innerHTML = `<div class="recall-hint" style="margin-top:4px;">इस शैली में कोई समय-सीमा निर्धारित नहीं होती — जब चाहें "परीक्षा समाप्त करें" दबाकर रोक सकते हैं।</div>`;
-    }
-  }
-
-  function updateStyleCards(){
-    document.querySelectorAll('.setup-style-card').forEach(c => {
-      c.classList.toggle('active', c.getAttribute('data-style') === cfg.style);
-    });
-  }
-
-  document.querySelectorAll('.setup-style-card').forEach(c => {
-    c.addEventListener('click', () => {
-      cfg.style = c.getAttribute('data-style');
-      saveProgress();
-      updateStyleCards();
-      renderDurationSection();
-    });
-  });
-
-  updateStyleCards();
-  renderDurationSection();
-
-  document.getElementById('startTimedBtn').addEventListener('click', startTimedTest);
-}
-
-function startTimedTest(){
-  const cfg = progress.timedConfig;
-  const pool = effectivePool();
-  if(pool.length === 0){
-    showInfoModal('चयनित दायरे में कोई श्लोक नहीं है। कृपया ऊपर से अध्याय चुनें।');
-    return;
-  }
-  timedState = {
-    phase: 'running',
-    style: cfg.style,
-    order: cfg.order,
-    sessionTested: new Set(),
-    cursor: 0,
-    currentItem: null,
-    verseDeadlineAt: null,
-    sessionEndAt: cfg.style === 'session' ? (Date.now() + cfg.sessionMinutes*60*1000) : null,
-    promptShownAt: null,
-    results: { attempted: 0, timedOut: 0, perVerseSeconds: [] }
-  };
-  pickNextTimedVerse();
-  if(timedState.style === 'countdown') startCountdownForCurrent();
-  else if(timedState.style === 'measure') timedState.promptShownAt = Date.now();
-  renderTimedFlow();
-}
-
-function pickNextTimedVerse(){
-  if(timedState.order === 'sequential'){
-    const list = effectivePool(); // already chapter/verse ascending
-    if(timedState.cursor >= list.length){
-      timedState.currentItem = null;
-      return;
-    }
-    timedState.currentItem = list[timedState.cursor];
-    timedState.cursor += 1;
-    return;
-  }
-  const pool = timedScopedPool(timedState.sessionTested);
-  if(pool.length === 0){
-    timedState.currentItem = null;
-    return;
-  }
-  const idx = Math.floor(Math.random() * pool.length);
-  timedState.currentItem = pool[idx];
-}
-
-function startCountdownForCurrent(){
-  timedState.verseDeadlineAt = Date.now() + progress.timedConfig.perShlokaSeconds*1000;
-  timedState.verseRevealed = false;
-  timedState.verseTimedOut = false;
-}
-
-/* ---- Countdown style ---- */
-
-function resumeCountdownRunning(){
-  hideTimerTopbar();
-  const item = timedState.currentItem;
-  if(!item){ finishTimedTest(); return; }
-  const card = document.getElementById('mainCard');
-  if(!timedState.verseRevealed){
-    card.innerHTML = `
-      <div class="prompt-eyebrow">समयबद्ध परीक्षा · प्रति श्लोक उलटी गिनती · ${timedState.order==='sequential'?'क्रमबद्ध':'यादृच्छिक'}</div>
-      <div class="chapter-title">अध्याय ${toDevanagariNum(item.c)} — ${item.ct}</div>
-      <div class="verse-ref">
-        श्लोक ${toDevanagariNum(item.v)}
-      </div>
-      <div class="big-timer" id="bigTimer">--</div>
-      <div class="hint-line" id="hintLine"></div>
-      <div class="recall-hint">इस श्लोक को मन ही मन स्मरण करें।</div>
-      <button class="btn btn-primary" id="showAnswerBtn">उत्तर दिखाएँ</button>
-      <button class="btn btn-secondary" id="hintBtn">संकेत देखें</button>
-      <button class="btn btn-secondary" id="stopTimedBtn">परीक्षा समाप्त करें</button>
-    `;
-    document.getElementById('showAnswerBtn').addEventListener('click', () => {
-      revealTimedCountdown(item, false);
-    });
-    wireHintButton(item);
-    document.getElementById('stopTimedBtn').addEventListener('click', confirmStopTimedTest);
-  } else {
-    renderCountdownAnswer(item);
-  }
-}
-
-function revealTimedCountdown(item, timedOut){
-  timedState.verseRevealed = true;
-  timedState.verseTimedOut = timedOut;
-  timedState.results.attempted += 1;
-  if(timedOut) timedState.results.timedOut += 1;
-  if(!timedState.sessionTested.has(keyOf(item))) timedState.sessionTested.add(keyOf(item));
-  markActivity();
-  recordCoverage(item);
-  renderCountdownAnswer(item);
-}
-
-function renderCountdownAnswer(item){
-  const card = document.getElementById('mainCard');
-  const speakerHtml = item.sp ? `<div class="divider-speaker">${item.sp}</div>` : '';
-  const timeoutTag = timedState.verseTimedOut ? `<div class="timeout-tag">⏱ समय समाप्त — उत्तर स्वतः दिखाया गया</div>` : '';
-  card.innerHTML = `
-    <div class="answer-meta">अध्याय ${toDevanagariNum(item.c)} — ${item.ct} · श्लोक ${toDevanagariNum(item.v)}</div>
-    ${timeoutTag}
-    ${speakerHtml}
-    <div class="shloka-text">${item.t}</div>
-    <button class="btn btn-primary" id="nextTimedBtn">अगला श्लोक</button>
-    ${hardToggleHtml()}
-    <button class="btn btn-secondary" id="stopTimedBtn">परीक्षा समाप्त करें</button>
-  `;
-  document.getElementById('nextTimedBtn').addEventListener('click', () => {
-    pickNextTimedVerse();
-    if(!timedState.currentItem){ finishTimedTest(); return; }
-    startCountdownForCurrent();
-    renderTimedFlow();
-  });
-  wireHardToggle(item);
-  document.getElementById('stopTimedBtn').addEventListener('click', confirmStopTimedTest);
-}
-
-/* ---- Session style ---- */
-
-function resumeSessionRunning(){
-  const item = timedState.currentItem;
-  if(!item){ finishTimedTest(); return; }
-  const remaining = timedState.sessionEndAt - Date.now();
-  showTimerTopbar('शेष समय', formatMMSS(remaining), remaining < 30000);
-  const card = document.getElementById('mainCard');
-  if(!timedState.verseRevealed){
-    card.innerHTML = `
-      <div class="prompt-eyebrow">समयबद्ध परीक्षा · सत्र चुनौती · ${timedState.order==='sequential'?'क्रमबद्ध':'यादृच्छिक'}</div>
-      <div class="chapter-title">अध्याय ${toDevanagariNum(item.c)} — ${item.ct}</div>
-      <div class="verse-ref">
-        श्लोक ${toDevanagariNum(item.v)}
-      </div>
-      <div class="hint-line" id="hintLine"></div>
-      <div class="recall-hint">इस श्लोक को मन ही मन स्मरण करें, फिर उत्तर देखने के लिए नीचे दबाएँ।</div>
-      <button class="btn btn-primary" id="showAnswerBtn">उत्तर दिखाएँ</button>
-      <button class="btn btn-secondary" id="hintBtn">संकेत देखें</button>
-      <button class="btn btn-secondary" id="stopTimedBtn">परीक्षा समाप्त करें</button>
-    `;
-    document.getElementById('showAnswerBtn').addEventListener('click', () => {
-      timedState.results.attempted += 1;
-      timedState.verseRevealed = true;
-      if(!timedState.sessionTested.has(keyOf(item))) timedState.sessionTested.add(keyOf(item));
-      markActivity();
-      recordCoverage(item);
-      renderTimedFlow();
-    });
-    wireHintButton(item);
-    document.getElementById('stopTimedBtn').addEventListener('click', confirmStopTimedTest);
-  } else {
-    const speakerHtml = item.sp ? `<div class="divider-speaker">${item.sp}</div>` : '';
-    card.innerHTML = `
-      <div class="answer-meta">अध्याय ${toDevanagariNum(item.c)} — ${item.ct} · श्लोक ${toDevanagariNum(item.v)}</div>
-      ${speakerHtml}
-      <div class="shloka-text">${item.t}</div>
-      <button class="btn btn-primary" id="nextTimedBtn">अगला श्लोक</button>
-      ${hardToggleHtml()}
-      <button class="btn btn-secondary" id="stopTimedBtn">परीक्षा समाप्त करें</button>
-    `;
-    document.getElementById('nextTimedBtn').addEventListener('click', () => {
-      pickNextTimedVerse();
-      timedState.verseRevealed = false;
-      if(!timedState.currentItem){ finishTimedTest(); return; }
-      renderTimedFlow();
-    });
-    wireHardToggle(item);
-    document.getElementById('stopTimedBtn').addEventListener('click', confirmStopTimedTest);
-  }
-}
-
-/* ---- Measure style ---- */
-
-function resumeMeasureRunning(){
-  hideTimerTopbar();
-  const item = timedState.currentItem;
-  if(!item){ finishTimedTest(); return; }
-  const card = document.getElementById('mainCard');
-  if(!timedState.verseRevealed){
-    if(!timedState.promptShownAt) timedState.promptShownAt = Date.now();
-    card.innerHTML = `
-      <div class="prompt-eyebrow">समयबद्ध परीक्षा · समय-मापन · ${timedState.order==='sequential'?'क्रमबद्ध':'यादृच्छिक'}</div>
-      <div class="chapter-title">अध्याय ${toDevanagariNum(item.c)} — ${item.ct}</div>
-      <div class="verse-ref">
-        श्लोक ${toDevanagariNum(item.v)}
-      </div>
-      <div class="stopwatch-line">बीता समय: <span id="stopwatchVal">00:00</span></div>
-      <div class="hint-line" id="hintLine"></div>
-      <button class="btn btn-primary" id="showAnswerBtn">उत्तर दिखाएँ</button>
-      <button class="btn btn-secondary" id="hintBtn">संकेत देखें</button>
-      <button class="btn btn-secondary" id="stopTimedBtn">परीक्षा समाप्त करें</button>
-    `;
-    document.getElementById('showAnswerBtn').addEventListener('click', () => {
-      const elapsedSec = Math.round((Date.now() - timedState.promptShownAt)/1000);
-      timedState.results.attempted += 1;
-      timedState.results.perVerseSeconds.push(elapsedSec);
-      timedState.verseRevealed = true;
-      timedState.lastElapsedSec = elapsedSec;
-      if(!timedState.sessionTested.has(keyOf(item))) timedState.sessionTested.add(keyOf(item));
-      markActivity();
-      recordCoverage(item);
-      renderTimedFlow();
-    });
-    wireHintButton(item);
-    document.getElementById('stopTimedBtn').addEventListener('click', confirmStopTimedTest);
-  } else {
-    const speakerHtml = item.sp ? `<div class="divider-speaker">${item.sp}</div>` : '';
-    card.innerHTML = `
-      <div class="answer-meta">अध्याय ${toDevanagariNum(item.c)} — ${item.ct} · श्लोक ${toDevanagariNum(item.v)}</div>
-      <div class="stopwatch-line">आपने ${toDevanagariNum(timedState.lastElapsedSec)} सेकंड में उत्तर देखा</div>
-      ${speakerHtml}
-      <div class="shloka-text">${item.t}</div>
-      <button class="btn btn-primary" id="nextTimedBtn">अगला श्लोक</button>
-      ${hardToggleHtml()}
-      <button class="btn btn-secondary" id="stopTimedBtn">परीक्षा समाप्त करें</button>
-    `;
-    document.getElementById('nextTimedBtn').addEventListener('click', () => {
-      pickNextTimedVerse();
-      timedState.verseRevealed = false;
-      timedState.promptShownAt = null;
-      if(!timedState.currentItem){ finishTimedTest(); return; }
-      renderTimedFlow();
-    });
-    wireHardToggle(item);
-    document.getElementById('stopTimedBtn').addEventListener('click', confirmStopTimedTest);
-  }
-}
-
-/* ---- Tick / interval ---- */
-
-function timedTick(){
-  if(!timedState || timedState.phase !== 'running') return;
-
-  if(timedState.style === 'countdown' && !timedState.verseRevealed && timedState.verseDeadlineAt){
-    const remaining = timedState.verseDeadlineAt - Date.now();
-    const timerEl = document.getElementById('bigTimer');
-    if(timerEl){
-      const secs = Math.max(0, Math.ceil(remaining/1000));
-      timerEl.textContent = toDevanagariNum(secs);
-      timerEl.classList.toggle('low', secs <= 5);
-    }
-    if(remaining <= 0){
-      revealTimedCountdown(timedState.currentItem, true);
-    }
-  } else if(timedState.style === 'session'){
-    const remaining = timedState.sessionEndAt - Date.now();
-    if(document.getElementById('timerTopbarValue')){
-      showTimerTopbar('शेष समय', formatMMSS(remaining), remaining < 30000);
-    }
-    if(remaining <= 0){
-      finishTimedTest();
-    }
-  } else if(timedState.style === 'measure' && !timedState.verseRevealed && timedState.promptShownAt){
-    const el = document.getElementById('stopwatchVal');
-    if(el){
-      el.textContent = formatMMSS(Date.now() - timedState.promptShownAt);
-    }
-  }
-}
-
-function confirmStopTimedTest(){
-  showConfirmModal(
-    'क्या आप वाकई यह समयबद्ध परीक्षा समाप्त करना चाहते हैं?',
-    () => finishTimedTest()
-  );
-}
-
-function finishTimedTest(){
-  stopTimedInterval();
-  timedState.phase = 'result';
-  renderTimedFlow();
-}
-
-function renderTimedResults(){
-  const card = document.getElementById('mainCard');
-  const r = timedState.results;
-  const style = timedState.style;
-  let statsHtml = '';
-  if(style === 'countdown'){
-    statsHtml = `
-      <div class="result-stats">
-        <div class="result-stat"><span class="stat-value">${toDevanagariNum(r.attempted)}</span><span class="stat-label">कुल प्रयास</span></div>
-        <div class="result-stat"><span class="stat-value">${toDevanagariNum(r.attempted - r.timedOut)}</span><span class="stat-label">समय पर उत्तर</span></div>
-        <div class="result-stat"><span class="stat-value">${toDevanagariNum(r.timedOut)}</span><span class="stat-label">समय समाप्त</span></div>
-      </div>
-    `;
-  } else if(style === 'session'){
-    statsHtml = `
-      <div class="result-stats">
-        <div class="result-stat"><span class="stat-value">${toDevanagariNum(r.attempted)}</span><span class="stat-label">श्लोक पूर्ण किए</span></div>
-        <div class="result-stat"><span class="stat-value">${toDevanagariNum(progress.timedConfig.sessionMinutes)}</span><span class="stat-label">मिनट का सत्र</span></div>
-      </div>
-    `;
-  } else {
-    const times = r.perVerseSeconds;
-    const avg = times.length ? Math.round(times.reduce((a,b)=>a+b,0)/times.length) : 0;
-    const fastest = times.length ? Math.min(...times) : 0;
-    const slowest = times.length ? Math.max(...times) : 0;
-    statsHtml = `
-      <div class="result-stats">
-        <div class="result-stat"><span class="stat-value">${toDevanagariNum(r.attempted)}</span><span class="stat-label">कुल श्लोक</span></div>
-        <div class="result-stat"><span class="stat-value">${toDevanagariNum(avg)}</span><span class="stat-label">औसत सेकंड</span></div>
-        <div class="result-stat"><span class="stat-value">${toDevanagariNum(fastest)}</span><span class="stat-label">सबसे तेज़ (से.)</span></div>
-        <div class="result-stat"><span class="stat-value">${toDevanagariNum(slowest)}</span><span class="stat-label">सबसे धीमा (से.)</span></div>
-      </div>
-    `;
-  }
-  card.innerHTML = `
-    <div class="done-banner">
-      <div class="om">ॐ</div>
-      <h2>समयबद्ध परीक्षा पूर्ण हुई!</h2>
-      ${statsHtml}
-      <button class="btn btn-primary" id="newTimedBtn" style="margin-top:10px;">नई समयबद्ध परीक्षा प्रारम्भ करें</button>
-    </div>
-  `;
-  document.getElementById('newTimedBtn').addEventListener('click', () => {
-    timedState = null;
-    renderTimedFlow();
-  });
-}
-
 /* ============ CHAPTER REVISION MODE ("अध्याय पुनरावलोकन") ============ */
 /* Pure browsing/reading — no prompts, no reveal mechanic, no scoring.
    Pick a chapter, read straight through all its shlokas. */
@@ -2490,7 +1956,6 @@ function markActivity(){
   s.count = (s.last === yesterday) ? s.count + 1 : 1;
   s.last = t;
   saveProgress();
-  renderStreakChip();
 }
 
 function effectiveStreak(){
@@ -2499,41 +1964,11 @@ function effectiveStreak(){
   return 0;
 }
 
-function renderStreakChip(){
-  document.getElementById('streakChip').textContent = '🔥 ' + toDevanagariNum(effectiveStreak()) + ' दिन';
-}
 
 function recordCoverage(item){
   progress.coverage[keyOf(item)] = 1;
   saveProgress();
 }
-
-/* ---- Daily verse ---- */
-
-function dailyVerseItem(){
-  const t = todayStr();
-  let h = 0;
-  for(let i = 0; i < t.length; i++){ h = (h * 31 + t.charCodeAt(i)) >>> 0; }
-  return GITA[h % GITA.length];
-}
-
-function renderDailyVerseCard(){
-  const item = dailyVerseItem();
-  document.getElementById('dailyVerseMeta').textContent =
-    'अध्याय ' + toDevanagariNum(item.c) + ' — ' + item.ct + ' · श्लोक ' + toDevanagariNum(item.v);
-  const spEl = document.getElementById('dailyVerseSpeaker');
-  if(item.sp){ spEl.textContent = item.sp; spEl.style.display = ''; }
-  else { spEl.style.display = 'none'; }
-  document.getElementById('dailyVerseText').textContent = item.t;
-}
-
-document.getElementById('dailyVerseBtn').addEventListener('click', () => {
-  const card = document.getElementById('dailyVerseCard');
-  const opening = !card.classList.contains('open');
-  card.classList.toggle('open');
-  document.getElementById('dailyVerseBtn').classList.toggle('active', opening);
-  if(opening) renderDailyVerseCard();
-});
 
 /* ---- Font size controls ---- */
 
@@ -2569,8 +2004,6 @@ document.getElementById('hardFilterChip').addEventListener('click', () => {
   progress.hardOnly = !progress.hardOnly;
   progress.random = { tested: [], round: 1, pending: null };
   progress.sequential = { position: 0, round: 1 };
-  padaState = null;
-  mcqState = null;
   saveProgress();
   renderCurrent();
 });
@@ -2751,476 +2184,6 @@ function renderSrsDone(){
   });
 }
 
-/* ============ PADA ORDERING MODE ("क्रम जोड़ो") ============ */
-
-let padaState = null;
-
-function padaSegments(item){
-  const text = item.t.replace(/\s*॥\s*$/, '');
-  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
-  if(lines.length >= 4) return lines;
-  const segs = [];
-  lines.forEach(line => {
-    const words = line.split(/\s+/);
-    if(words.length < 2){ segs.push(line); return; }
-    const total = line.length;
-    let best = 1, bestDiff = Infinity, cum = 0;
-    for(let k = 1; k < words.length; k++){
-      cum += words[k-1].length + 1;
-      const diff = Math.abs(cum - total/2);
-      if(diff < bestDiff){ bestDiff = diff; best = k; }
-    }
-    segs.push(words.slice(0, best).join(' '));
-    segs.push(words.slice(best).join(' '));
-  });
-  return segs;
-}
-
-function startPadaRound(){
-  const pool = effectivePool();
-  const prevStats = (padaState && padaState.stats) ? padaState.stats : { ok: 0, tries: 0 };
-  if(pool.length === 0){
-    padaState = { empty: true, stats: prevStats };
-    return;
-  }
-  const item = pool[Math.floor(Math.random() * pool.length)];
-  const segs = padaSegments(item);
-  let shuffled = segs.slice();
-  for(let a = 0; a < 12; a++){
-    shuffled = shuffleArr(segs);
-    if(shuffled.join('|') !== segs.join('|') || segs.length < 2) break;
-  }
-  padaState = { item, segs, shuffled, placed: [], checked: false, correct: null, stats: prevStats };
-}
-
-function renderPadaFlow(){
-  if(!padaState){ startPadaRound(); }
-  renderPadaCard();
-}
-
-function renderPadaCard(){
-  const card = document.getElementById('mainCard');
-  if(padaState.empty){
-    card.innerHTML = `
-      <div class="prompt-eyebrow">क्रम जोड़ो</div>
-      <div class="recall-hint">चयनित दायरे में कोई श्लोक नहीं है। ऊपर से अध्याय-चयन या कठिन-फ़िल्टर बदलें।</div>
-    `;
-    return;
-  }
-  const st = padaState;
-  const item = st.item;
-  const placedSet = new Set(st.placed);
-  const poolChips = st.shuffled
-    .map((seg, i) => ({ seg, i }))
-    .filter(o => !placedSet.has(o.i))
-    .map(o => `<div class="pada-chip" data-i="${o.i}">${o.seg}</div>`).join('');
-  const answerChips = st.placed
-    .map(i => `<div class="pada-chip ${st.checked ? (st.correct ? 'correct-chip' : 'wrong-chip') : ''}" data-placed="${i}">${st.shuffled[i]}</div>`).join('');
-
-  let resultHtml = '';
-  if(st.checked){
-    resultHtml = st.correct
-      ? `<div class="pada-result ok">✓ सही क्रम!</div>`
-      : `<div class="pada-result bad">✗ क्रम सही नहीं — नीचे सही श्लोक देखें</div>
-         <div class="shloka-text" style="margin-top:8px;">${item.t}</div>`;
-  }
-
-  card.innerHTML = `
-    <div class="prompt-eyebrow">क्रम जोड़ो · श्लोक के भागों को सही क्रम में लगाएँ</div>
-    <div class="chapter-title">अध्याय ${toDevanagariNum(item.c)} — ${item.ct} · श्लोक ${toDevanagariNum(item.v)}</div>
-    <div class="pada-stats">सही: ${toDevanagariNum(st.stats.ok)} / प्रयास: ${toDevanagariNum(st.stats.tries)}</div>
-    <div class="pada-area-label">आपका क्रम (हटाने के लिए भाग पर टैप करें)</div>
-    <div class="pada-answer" id="padaAnswer">${answerChips || '<div style="color:var(--muted);font-size:13px;text-align:center;padding:6px;">नीचे से भाग चुनें…</div>'}</div>
-    <div class="pada-area-label">उपलब्ध भाग</div>
-    <div class="pada-pool" id="padaPool">${poolChips}</div>
-    ${resultHtml}
-    ${st.checked
-      ? `<button class="btn btn-primary" id="padaNextBtn" style="margin-top:14px;">अगला श्लोक</button>${hardToggleHtml()}`
-      : `<button class="btn btn-primary" id="padaCheckBtn" style="margin-top:14px;${st.placed.length === st.segs.length ? '' : 'opacity:0.5;'}" ${st.placed.length === st.segs.length ? '' : 'disabled'}>जाँचें</button>`}
-  `;
-
-  if(!st.checked){
-    card.querySelectorAll('#padaPool .pada-chip').forEach(chip => {
-      chip.addEventListener('click', () => {
-        st.placed.push(parseInt(chip.getAttribute('data-i')));
-        renderPadaCard();
-      });
-    });
-    card.querySelectorAll('#padaAnswer .pada-chip').forEach(chip => {
-      chip.addEventListener('click', () => {
-        const i = parseInt(chip.getAttribute('data-placed'));
-        const idx = st.placed.indexOf(i);
-        if(idx >= 0) st.placed.splice(idx, 1);
-        renderPadaCard();
-      });
-    });
-    const checkBtn = document.getElementById('padaCheckBtn');
-    if(checkBtn && st.placed.length === st.segs.length){
-      checkBtn.addEventListener('click', () => {
-        const attempt = st.placed.map(i => st.shuffled[i]).join('|');
-        st.correct = (attempt === st.segs.join('|'));
-        st.checked = true;
-        st.stats.tries += 1;
-        if(st.correct) st.stats.ok += 1;
-        markActivity();
-        recordCoverage(item);
-        renderPadaCard();
-      });
-    }
-  } else {
-    document.getElementById('padaNextBtn').addEventListener('click', () => {
-      startPadaRound();
-      renderPadaCard();
-    });
-    wireHardToggle(item);
-  }
-}
-
-/* ============ MCQ MODE ("बहुविकल्पीय") ============ */
-
-let mcqState = null;
-let mcqTimerId = null;
-let mcqSettingsOpen = false;
-const GITA_TEXT_SET = new Set(GITA.map(x => x.t.trim()));
-
-function stopMcqTimer(){
-  if(mcqTimerId){ clearInterval(mcqTimerId); mcqTimerId = null; }
-}
-
-function lineCount(t){ return t.split('\n').length; }
-function firstWordOf(t){ return t.trim().split(/\s+/)[0]; }
-function firstLineOf(t){ return t.split('\n')[0]; }
-function cfgMcq(){ return progress.mcqConfig; }
-
-/* distractor candidate ordering by strategy */
-function mcqStrategyCandidates(item){
-  const cfg = cfgMcq();
-  const all = GITA.filter(x => keyOf(x) !== keyOf(item));
-  let strat = cfg.difficulty;
-  if(cfg.direction === 'number' && strat === 'onePada') strat = 'extreme';
-  if(strat === 'hard'){
-    const same = shuffleArr(all.filter(x => x.c === item.c));
-    return same.concat(shuffleArr(all.filter(x => x.c !== item.c)));
-  }
-  if(strat === 'extreme'){
-    const near = all.filter(x => x.c === item.c)
-                    .sort((a,b) => Math.abs(a.v - item.v) - Math.abs(b.v - item.v));
-    return near.concat(shuffleArr(all.filter(x => x.c !== item.c)));
-  }
-  if(strat === 'sameStart'){
-    const fw = firstWordOf(item.t);
-    const tiers = [
-      x => firstWordOf(x.t) === fw,
-      x => firstWordOf(x.t).startsWith(fw.slice(0, 4)),
-      x => firstWordOf(x.t).startsWith(fw.slice(0, 2)),
-      x => firstWordOf(x.t).startsWith(fw.slice(0, 1))
-    ];
-    const used = new Set();
-    let ordered = [];
-    for(const test of tiers){
-      const tier = shuffleArr(all.filter(x => !used.has(keyOf(x)) && test(x)));
-      tier.forEach(x => used.add(keyOf(x)));
-      ordered = ordered.concat(tier);
-    }
-    return ordered.concat(shuffleArr(all.filter(x => !used.has(keyOf(x)))));
-  }
-  return shuffleArr(all);
-}
-
-/* synthetic distractors: correct verse with exactly one pada (line) swapped in from another verse */
-function onePadaDistractors(item, n, forceFirstLine){
-  const lines = item.t.split('\n');
-  const lc = lines.length;
-  const donors = GITA.filter(x => keyOf(x) !== keyOf(item) && lineCount(x.t) === lc);
-  const results = [];
-  const seen = new Set([item.t.trim()]);
-  let guard = 0;
-  while(results.length < n && guard < 400 && donors.length > 0){
-    guard++;
-    const donor = donors[Math.floor(Math.random() * donors.length)];
-    const pos = forceFirstLine ? 0 : Math.floor(Math.random() * lc);
-    const donorLines = donor.t.split('\n');
-    if(!donorLines[pos] || donorLines[pos] === lines[pos]) continue;
-    const newLines = lines.slice();
-    newLines[pos] = donorLines[pos];
-    const t = newLines.join('\n');
-    if(seen.has(t.trim()) || GITA_TEXT_SET.has(t.trim())) continue;
-    seen.add(t.trim());
-    results.push({ t });
-  }
-  // fallback fill with real same-chapter verses if generation stalls
-  if(results.length < n){
-    for(const x of shuffleArr(GITA.filter(v => keyOf(v) !== keyOf(item)))){
-      if(results.length >= n) break;
-      if(seen.has(x.t.trim())) continue;
-      seen.add(x.t.trim());
-      results.push({ t: x.t });
-    }
-  }
-  return results;
-}
-
-function pickVerseDistractors(item, n){
-  const cfg = cfgMcq();
-  if(cfg.difficulty === 'onePada'){
-    return onePadaDistractors(item, n, cfg.firstLineOnly);
-  }
-  const cands = mcqStrategyCandidates(item);
-  const lc = lineCount(item.t);
-  let ordered = cands;
-  if(cfg.difficulty !== 'sameStart'){
-    const pref = cands.filter(x => lineCount(x.t) === lc);
-    ordered = pref.concat(cands.filter(x => lineCount(x.t) !== lc));
-  }
-  const displayOf = t => (cfg.firstLineOnly ? firstLineOf(t) : t).trim();
-  const seen = new Set([displayOf(item.t)]);
-  const picks = [];
-  for(const x of ordered){
-    if(picks.length >= n) break;
-    const d = displayOf(x.t);
-    if(seen.has(d)) continue;
-    seen.add(d);
-    picks.push({ t: x.t });
-  }
-  return picks;
-}
-
-function startMcqRound(){
-  stopMcqTimer();
-  const cfg = cfgMcq();
-  const pool = effectivePool();
-  const prevStats = (mcqState && mcqState.stats) ? mcqState.stats : { ok: 0, tries: 0, score: 0 };
-  if(pool.length === 0){
-    mcqState = { empty: true, stats: prevStats };
-    return;
-  }
-  const item = pool[Math.floor(Math.random() * pool.length)];
-  const n = cfg.optionCount - 1;
-  let options;
-  if(cfg.direction === 'number'){
-    const cands = mcqStrategyCandidates(item);
-    const seenK = new Set([keyOf(item)]);
-    const picks = [];
-    for(const x of cands){
-      if(picks.length >= n) break;
-      if(seenK.has(keyOf(x))) continue;
-      seenK.add(keyOf(x));
-      picks.push(x);
-    }
-    options = shuffleArr(
-      [{ num: true, c: item.c, v: item.v, isCorrect: true }]
-        .concat(picks.map(x => ({ num: true, c: x.c, v: x.v })))
-    );
-  } else {
-    const d = pickVerseDistractors(item, n);
-    options = shuffleArr([{ t: item.t, isCorrect: true }].concat(d));
-  }
-  const correctIdx = options.findIndex(o => o.isCorrect);
-  mcqState = {
-    item, options, correctIdx,
-    answered: false, chosenIdx: null, timedOut: false,
-    stats: prevStats,
-    deadline: cfg.timerSeconds > 0 ? Date.now() + cfg.timerSeconds * 1000 : null
-  };
-  if(cfg.timerSeconds > 0){
-    mcqTimerId = setInterval(mcqTick, 250);
-  }
-}
-
-function mcqTick(){
-  if(!mcqState || mcqState.answered || !mcqState.deadline) return;
-  const rem = mcqState.deadline - Date.now();
-  const el = document.getElementById('mcqTimer');
-  if(el){
-    const secs = Math.max(0, Math.ceil(rem / 1000));
-    el.textContent = toDevanagariNum(secs);
-    el.classList.toggle('low', secs <= 5);
-  }
-  if(rem <= 0){
-    answerMcq(null);
-  }
-}
-
-function answerMcq(idx){
-  const st = mcqState;
-  if(!st || st.answered) return;
-  stopMcqTimer();
-  st.answered = true;
-  st.chosenIdx = idx;
-  st.timedOut = (idx === null);
-  st.stats.tries += 1;
-  if(idx === st.correctIdx){
-    st.stats.ok += 1;
-    st.stats.score += 4;
-  } else {
-    st.stats.score -= 1;
-  }
-  markActivity();
-  recordCoverage(st.item);
-  renderMcqCard();
-}
-
-function renderMcqFlow(){
-  if(!mcqState){ startMcqRound(); }
-  renderMcqCard();
-}
-
-function mcqOptionDisplay(o){
-  const cfg = cfgMcq();
-  if(o.num){
-    return 'अध्याय ' + toDevanagariNum(o.c) + ' · श्लोक ' + toDevanagariNum(o.v);
-  }
-  return cfg.firstLineOnly ? firstLineOf(o.t) : o.t;
-}
-
-function mcqSettingPills(rowLabel, pills){
-  return `
-    <div class="mcq-diff-label">${rowLabel}</div>
-    <div class="duration-pills">${pills}</div>
-  `;
-}
-
-function renderMcqSettings(){
-  const cfg = cfgMcq();
-  const dpill = (val, label, disabled) =>
-    `<button class="duration-pill ${cfg.difficulty === val ? 'active' : ''}" data-set="difficulty" data-val="${val}" ${disabled ? 'disabled style="opacity:0.4;"' : ''}>${label}</button>`;
-  const gpill = (setKey, val, label, active) =>
-    `<button class="duration-pill ${active ? 'active' : ''}" data-set="${setKey}" data-val="${val}">${label}</button>`;
-  const numDir = cfg.direction === 'number';
-  return `
-    <div id="mcqSettingsPanel">
-      ${mcqSettingPills('कठिनाई (विकल्प कैसे चुने जाएँ)',
-        dpill('normal','सामान्य') + dpill('hard','कठिन') + dpill('extreme','अति कठिन') +
-        dpill('sameStart','समान-आरम्भ') + dpill('onePada','एक-पद भेद', numDir))}
-      ${mcqSettingPills('प्रश्न दिशा',
-        gpill('direction','verse','श्लोक चुनें', cfg.direction === 'verse') +
-        gpill('direction','number','क्रमांक चुनें', cfg.direction === 'number'))}
-      ${mcqSettingPills('विकल्पों की संख्या',
-        gpill('optionCount','4','४ विकल्प', cfg.optionCount === 4) +
-        gpill('optionCount','6','६ विकल्प', cfg.optionCount === 6))}
-      ${mcqSettingPills('केवल प्रथम पंक्ति',
-        gpill('firstLineOnly','false','बंद', !cfg.firstLineOnly) +
-        gpill('firstLineOnly','true','चालू', cfg.firstLineOnly))}
-      ${mcqSettingPills('समय सीमा प्रति प्रश्न',
-        gpill('timerSeconds','0','बंद', cfg.timerSeconds === 0) +
-        gpill('timerSeconds','15','१५ से०', cfg.timerSeconds === 15) +
-        gpill('timerSeconds','30','३० से०', cfg.timerSeconds === 30))}
-      ${mcqSettingPills('नकारात्मक अंकन (सही +४ / ग़लत −१)',
-        gpill('negativeMarking','false','बंद', !cfg.negativeMarking) +
-        gpill('negativeMarking','true','चालू', cfg.negativeMarking))}
-    </div>
-  `;
-}
-
-function applyMcqSetting(key, val){
-  const cfg = cfgMcq();
-  if(key === 'difficulty') cfg.difficulty = val;
-  else if(key === 'direction'){
-    cfg.direction = val;
-    if(val === 'number' && cfg.difficulty === 'onePada') cfg.difficulty = 'extreme';
-  }
-  else if(key === 'optionCount') cfg.optionCount = parseInt(val);
-  else if(key === 'timerSeconds') cfg.timerSeconds = parseInt(val);
-  else if(key === 'firstLineOnly') cfg.firstLineOnly = (val === 'true');
-  else if(key === 'negativeMarking') cfg.negativeMarking = (val === 'true');
-  saveProgress();
-  startMcqRound();
-  renderMcqCard();
-}
-
-function renderMcqCard(){
-  const card = document.getElementById('mainCard');
-  if(mcqState.empty){
-    card.innerHTML = `
-      <div class="prompt-eyebrow">बहुविकल्पीय परीक्षा</div>
-      <div class="recall-hint">चयनित दायरे में कोई श्लोक नहीं है। ऊपर से अध्याय-चयन या कठिन-फ़िल्टर बदलें।</div>
-    `;
-    return;
-  }
-  const cfg = cfgMcq();
-  const st = mcqState;
-  const item = st.item;
-
-  const optionsHtml = st.options.map((o, i) => {
-    let cls = '';
-    if(st.answered){
-      if(i === st.correctIdx) cls = 'correct';
-      else if(i === st.chosenIdx) cls = 'wrong';
-      else cls = 'dim';
-    }
-    return `<button class="mcq-option ${cls}" data-i="${i}" ${st.answered ? 'disabled' : ''}>${mcqOptionDisplay(o)}</button>`;
-  }).join('');
-
-  let questionHtml;
-  if(cfg.direction === 'number'){
-    const qText = cfg.firstLineOnly ? firstLineOf(item.t) : item.t;
-    questionHtml = `
-      <div class="shloka-text" style="margin:6px 0 4px;">${qText}</div>
-      <div class="recall-hint" style="text-align:center;">यह श्लोक कहाँ का है? सही क्रमांक चुनिए।</div>
-    `;
-  } else {
-    questionHtml = `
-      <div class="chapter-title" style="margin-top:6px;">अध्याय ${toDevanagariNum(item.c)} — ${item.ct}</div>
-      <div class="verse-ref" style="font-size:clamp(28px,7vw,38px);">
-        श्लोक ${toDevanagariNum(item.v)}
-        <span class="small">नीचे दिए विकल्पों में से सही श्लोक चुनिए</span>
-      </div>
-    `;
-  }
-
-  const scoreExtra = cfg.negativeMarking ? ` · अंक: ${toDevanagariNum(st.stats.score)}` : '';
-  const timerHtml = (cfg.timerSeconds > 0 && !st.answered)
-    ? `<div class="big-timer" id="mcqTimer" style="font-size:clamp(30px,9vw,44px);">${toDevanagariNum(cfg.timerSeconds)}</div>`
-    : '';
-  const timeoutTag = (st.answered && st.timedOut)
-    ? `<div class="timeout-tag">⏱ समय समाप्त — ग़लत माना गया</div>`
-    : '';
-  const fullVerseAfter = (st.answered && cfg.direction === 'verse' && cfg.firstLineOnly)
-    ? `<div class="pada-area-label" style="text-align:center;">पूर्ण श्लोक</div><div class="shloka-text">${item.t}</div>`
-    : '';
-
-  card.innerHTML = `
-    <div class="q-top" style="display:flex;justify-content:space-between;align-items:center;">
-      <div class="prompt-eyebrow" style="margin-bottom:0;">बहुविकल्पीय परीक्षा</div>
-      <button class="change-chapter-btn" id="mcqSettingsBtn">⚙ सेटिंग्स</button>
-    </div>
-    ${mcqSettingsOpen ? renderMcqSettings() : ''}
-    <div class="pada-stats" style="margin-top:12px;">सही: ${toDevanagariNum(st.stats.ok)} / प्रयास: ${toDevanagariNum(st.stats.tries)}${scoreExtra}</div>
-    ${timerHtml}
-    ${questionHtml}
-    <div id="mcqOptions" style="margin-top:10px;">${optionsHtml}</div>
-    ${timeoutTag}
-    ${fullVerseAfter}
-    ${st.answered ? `<button class="btn btn-primary" id="mcqNextBtn" style="margin-top:8px;">अगला प्रश्न</button>${hardToggleHtml()}` : ''}
-  `;
-
-  document.getElementById('mcqSettingsBtn').addEventListener('click', () => {
-    mcqSettingsOpen = !mcqSettingsOpen;
-    renderMcqCard();
-  });
-
-  const panel = document.getElementById('mcqSettingsPanel');
-  if(panel){
-    panel.querySelectorAll('.duration-pill').forEach(btn => {
-      btn.addEventListener('click', () => {
-        applyMcqSetting(btn.getAttribute('data-set'), btn.getAttribute('data-val'));
-      });
-    });
-  }
-
-  if(!st.answered){
-    document.querySelectorAll('#mcqOptions .mcq-option').forEach(btn => {
-      btn.addEventListener('click', () => answerMcq(parseInt(btn.getAttribute('data-i'))));
-    });
-  } else {
-    document.getElementById('mcqNextBtn').addEventListener('click', () => {
-      startMcqRound();
-      renderMcqCard();
-    });
-    wireHardToggle(item);
-  }
-}
-
 /* ============ PROGRESS DASHBOARD ("प्रगति") ============ */
 
 function renderDashboard(){
@@ -3244,7 +2207,6 @@ function renderDashboard(){
     <div class="prompt-eyebrow">प्रगति डैशबोर्ड</div>
     <div class="result-stats" style="margin-top:4px;">
       <div class="result-stat"><span class="stat-value">${toDevanagariNum(coveredTotal)}</span><span class="stat-label">श्लोक देखे (कुल ${toDevanagariNum(GITA.length)})</span></div>
-      <div class="result-stat"><span class="stat-value">${toDevanagariNum(effectiveStreak())}</span><span class="stat-label">दिन की स्ट्रीक</span></div>
       <div class="result-stat"><span class="stat-value">${toDevanagariNum(progress.hardVerses.length)}</span><span class="stat-label">कठिन चिह्नित</span></div>
       <div class="result-stat"><span class="stat-value">${toDevanagariNum(dueCount)}</span><span class="stat-label">स्मृति-अभ्यास देय</span></div>
     </div>
@@ -3255,7 +2217,6 @@ function renderDashboard(){
 
 /* ---- startup for new features ---- */
 applyFontScale();
-renderStreakChip();
 
 renderCurrent();
 
