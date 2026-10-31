@@ -798,12 +798,7 @@ header.top .util-btn{ padding:4px 11px; font-size:13px; }
 .sk-anv{ text-align:left; margin:10px 0 4px; }
 .sk-anv .pa-sec{ margin:10px 2px 6px; }
 .sk-anv-note{ font-size:12px; color:var(--muted); margin:-2px 2px 6px; }
-.sk-anv-text{ font-family:'Tiro Devanagari Sanskrit', serif; font-size:calc(16px * var(--fscale,1)); line-height:1.8; color:var(--gold-soft); padding:0 2px; }
-.sk-anv-arth{ font-family:'Tiro Devanagari Hindi','Tiro Devanagari Sanskrit', serif; font-size:calc(16px * var(--fscale,1)); line-height:1.8; color:var(--text); padding:0 2px; }
 .sk-anv-none{ font-size:13px; color:var(--muted); padding:0 2px; }
-.sk-anv-det{ margin-top:10px; }
-.sk-anv-det summary{ cursor:pointer; font-size:13px; color:var(--gold-soft); margin-bottom:6px; }
-.sk-anv-src{ font-size:11px; color:var(--muted); margin-top:8px; }
 .sk-actions{ position:sticky; bottom:-14px; margin:10px -14px -14px; padding:10px 14px 14px; background:var(--panel); border-top:1px solid var(--line); z-index:2; }
 </style>
 <style id="kjStyle">
@@ -1754,7 +1749,7 @@ function skSettingsHtml(){
       <div class="sk-note">अंतर ${toDevanagariNum(s.gap)}: चक्र १ में १, ${toDevanagariNum(1 + s.gap)}, ${toDevanagariNum(1 + 2 * s.gap)} …; चक्र २ में २, ${toDevanagariNum(2 + s.gap)}, ${toDevanagariNum(2 + 2 * s.gap)} … — ${toDevanagariNum(s.gap)} चक्रों में हर श्लोक एक बार।</div>
       <div class="mcq-diff-label">अभ्यास की दिशा</div>
       <div class="duration-pills">${dp('num', 'संख्या → श्लोक')}${dp('verse', 'श्लोक → संख्या')}${dp('both', 'बारी-बारी')}</div>
-      <div class="mcq-diff-label">उत्तर के साथ पद-अन्वय व अर्थ</div>
+      <div class="mcq-diff-label">उत्तर के साथ पद-अन्वय (शब्दशः अर्थ)</div>
       <div class="duration-pills"><button class="duration-pill ${s.anv ? 'active' : ''}" data-skanv="1">दिखाएँ</button><button class="duration-pill ${!s.anv ? 'active' : ''}" data-skanv="0">छिपाएँ</button></div>
       <div class="mcq-diff-label">अध्याय पर जाएँ</div>
       <select class="sk-select" id="skChSel">${opts}</select>
@@ -2806,22 +2801,20 @@ if('serviceWorker' in navigator){
     const gi = (BY_CH[c] || []).find(i => ANV[i].v.includes(vn));
     if (gi === undefined) return '';
     const g = ANV[gi];
-    const ps = g.p.filter(pr => pr[0]);
-    if (!ps.length) return '<div class="sk-anv"><div class="pa-sec">पद-अन्वय</div><div class="sk-anv-none">इस श्लोक का पद-अन्वय उपलब्ध नहीं है।</div></div>';
-    const joint = g.v.length > 1 ? '<div class="sk-anv-note">श्लोक ' + label(g) + ' का संयुक्त अन्वय</div>' : '';
-    const anv = ps.map(pr => esc(pr[0])).join(' ');
-    const arth = ps.map(pr => pr[1]).filter(m => m && m !== '*')
-      .concat((g.x || []).map(p => p[1]).filter(Boolean)).map(esc).join(' ');
-    let rows = '';
-    for (const pr of ps){
-      const m = pr[1] && pr[1] !== '*' ? pr[1] : '';
-      rows += '<div class="pa-row"><div class="pa-p">' + esc(pr[0]) + '</div><div class="pa-m' + (m ? '' : ' pa-none') + '">' + (m ? esc(m) : '—') + '</div></div>';
+    let h = '<div class="sk-anv"><div class="pa-sec">पद-अन्वय — शब्दशः अर्थ</div>';
+    if (g.v.length > 1) h += '<div class="sk-anv-note">श्लोक ' + label(g) + ' का संयुक्त पद-अन्वय</div>';
+    if (!g.p.length) return h + '<div class="sk-anv-none">इस श्लोक का पद-अन्वय उपलब्ध नहीं है।</div></div>';
+    h += '<div class="pa-tbl">';
+    for (const pr of g.p){
+      const m = pr[1];
+      h += '<div class="pa-row"><div class="pa-p">' + esc(pr[0]) + '</div>'
+         + '<div class="pa-m' + (m ? '' : ' pa-none') + '">' + (m ? esc(m) : '—') + '</div></div>';
     }
-    return '<div class="sk-anv"><div class="pa-sec">पद-अन्वय</div>' + joint
-      + '<div class="sk-anv-text">' + anv + '</div>'
-      + '<div class="pa-sec">शब्दार्थ (अन्वय-क्रम से)</div><div class="sk-anv-arth">' + arth + '</div>'
-      + '<details class="sk-anv-det"><summary>शब्दशः अर्थ — तालिका</summary><div class="pa-tbl">' + rows + '</div></details>'
-      + '<div class="sk-anv-src">स्रोत: गीताप्रेस — पदच्छेद, अन्वय और भाषाटीकासहित</div></div>';
+    h += '</div>';
+    if (g.x && g.x.length){
+      h += '<div class="pa-extra">अन्य पद: ' + g.x.map(p => '<b>' + esc(p[0]) + '</b> = ' + esc(p[1])).join(' · ') + '</div>';
+    }
+    return h + '</div>';
   };
 
   fillCh(); render();
