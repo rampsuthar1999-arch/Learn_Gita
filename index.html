@@ -795,6 +795,17 @@ header.top .util-btn{ padding:4px 11px; font-size:13px; }
 .hint-line{ margin:4px 0 2px; }
 
 .sk-actions{ position:sticky; bottom:-14px; margin:10px -14px -14px; padding:10px 14px 14px; background:var(--panel); z-index:2; }
+
+/* संख्या-क्रम: टाइमर */
+.sk-timer{ display:flex; align-items:center; justify-content:flex-end; gap:6px; margin:0 0 6px; }
+.sk-timer.on{ justify-content:space-between; background:var(--panel2); border:1px solid var(--line); border-radius:10px; padding:4px 6px 4px 10px; }
+.sk-tval{ font-family:'Tiro Devanagari Sanskrit', serif; font-size:18px; color:var(--gold-soft); margin-right:auto; letter-spacing:.5px; }
+.sk-tval.paused{ color:var(--muted); }
+.sk-tbtn{ padding:5px 10px; border-radius:8px; border:1px solid var(--line); background:var(--panel); color:var(--text); font-family:inherit; font-size:12.5px; cursor:pointer; white-space:nowrap; }
+.sk-tbtn:hover{ border-color:var(--gold); }
+.sk-time-result{ margin:4px 0 6px; }
+.sk-time-big{ font-family:'Tiro Devanagari Sanskrit', serif; font-size:32px; color:var(--gold-soft); }
+.sk-best{ color:var(--gold-soft); }
 </style>
 <style id="kjStyle">
 /* ===== शब्द-खोज (concordance) — scoped under #khojRoot ===== */
@@ -1565,6 +1576,9 @@ function resetCurrentModeProgress(){
 
 function switchMode(mode){
   if(progress.mode === mode) return;
+  if(progress.mode === 'sankhya' && progress.sankhya && progress.sankhya.timer && progress.sankhya.timer.start){
+    const t = progress.sankhya.timer; t.acc += Date.now() - t.start; t.start = null; t.auto = true;   // resumes on return
+  }
   progress.mode = mode;
   saveProgress();
   renderCurrent();
@@ -1579,19 +1593,24 @@ document.getElementById('modeKhojBtn').addEventListener('click', () => switchMod
 document.getElementById('modeSankhyaBtn').addEventListener('click', () => switchMode('sankhya'));
 
 /* ============ संख्या-क्रम MODE — श्लोक-संख्या का व्यवस्थित अभ्यास ============
-   Chapter by chapter. Within a chapter, pass k (k = 1..gap) asks verses k, k+gap, k+2·gap …
-   so that after `gap` passes every verse has come exactly once. Missed verses come back at
-   the end of the same pass and are added to the "कठिन" list.
+   Flow 'chapter': chapter by chapter. Flow 'all': the whole selection (पूरी गीता) in one flow.
+   Pass k (k = 1..gap) asks verses k, k+gap, k+2·gap … (in 'all' flow: of every chapter in turn),
+   so that after `gap` passes every verse has come exactly once. Missed verses come back at the
+   end of the same pass and are added to the "कठिन" list.
    Directions: 'num'  = number shown → recite the verse (self-graded)
                'verse'= first line shown → type the verse number (auto-checked)
-               'both' = alternate.                                                        */
+               'both' = alternate.
+   Timer (optional): counts only while the app is on screen; on/pause/off; the time for a
+   finished chapter (or the whole flow) is shown and the best time is kept.              */
 
 function firstLineOf(t){ return t.split('\n')[0]; }
 const SK_GAPS = [3, 4, 5, 7, 10];
 let skSettingsOpen = false;   // panel open/closed: this session only
 
 function skDefault(){
-  return { gap: 5, dir: 'num', ch: null, pass: 1, pos: 0, retry: [], q: 0, done: {}, miss: {}, phase: 'ask', ans: null };
+  return { gap: 5, dir: 'num', flow: 'chapter', ch: null, pass: 1, pos: 0, retry: [], q: 0, done: {}, miss: {},
+           phase: 'ask', ans: null, timer: { on: false, acc: 0, start: null, auto: false, fromStart: false },
+           result: null, times: {} };
 }
 function skState(){
   if(!progress.sankhya) progress.sankhya = skDefault();
@@ -1606,39 +1625,54 @@ function skChapters(){
 function skChapterVerses(c){
   return effectivePool().filter(it => it.c === c).sort((a, b) => a.v - b.v);
 }
-function skPassList(c, pass, gap){
-  return skChapterVerses(c).filter(it => (it.v - 1) % gap === pass - 1);
+// verses of the current unit: one chapter, or the whole selection
+function skUnitVerses(){
+  const s = skState();
+  if(s.flow === 'all') return effectivePool().slice().sort((a, b) => a.c - b.c || a.v - b.v);
+  return skChapterVerses(s.ch);
 }
-function skPassCount(c, gap){
+function skUnitKey(){ const s = skState(); return s.flow === 'all' ? 'all' : 'c' + s.ch; }
+function skUnitName(){ const s = skState(); return s.flow === 'all' ? 'पूरी गीता' : 'अध्याय ' + toDevanagariNum(s.ch); }
+function skPassList(pass){
+  const s = skState();
+  return skUnitVerses().filter(it => (it.v - 1) % s.gap === pass - 1);
+}
+function skPassCount(){
   // passes that actually contain verses (a short hard-only selection may skip some)
-  const vs = skChapterVerses(c);
+  const s = skState();
+  const vs = skUnitVerses();
   const n = [];
-  for(let k = 1; k <= gap; k++) if(vs.some(it => (it.v - 1) % gap === k - 1)) n.push(k);
+  for(let k = 1; k <= s.gap; k++) if(vs.some(it => (it.v - 1) % s.gap === k - 1)) n.push(k);
   return n;
 }
-function skStartChapter(c){
+function skStartUnit(c){
   const s = skState();
-  s.ch = c; s.pass = skPassCount(c, s.gap)[0] || 1; s.pos = 0; s.retry = [];
-  s.done = {}; s.miss = {}; s.phase = 'ask'; s.ans = null;
+  if(c !== undefined && c !== null) s.ch = c;
+  s.pass = skPassCount()[0] || 1; s.pos = 0; s.retry = [];
+  s.done = {}; s.miss = {}; s.phase = 'ask'; s.ans = null; s.result = null;
+  skTimerReset();
   saveProgress();
+}
+function skAtStart(){
+  const s = skState();
+  return s.pos === 0 && s.retry.length === 0 && Object.keys(s.done).length === 0 && Object.keys(s.miss).length === 0;
 }
 function skEnsure(){
   const s = skState();
   const chs = skChapters();
   if(chs.length === 0) return false;
-  if(s.ch === null || !chs.includes(s.ch)) skStartChapter(chs[0]);
+  if(s.ch === null || !chs.includes(s.ch)) skStartUnit(chs[0]);
   return true;
 }
-// the verse to ask now, or null when the chapter is finished (passes advance here)
+// the verse to ask now, or null when the unit is finished (passes advance here)
 function skCurrent(){
   const s = skState();
   for(let guard = 0; guard < 20; guard++){
-    const list = skPassList(s.ch, s.pass, s.gap);
+    const list = skPassList(s.pass);
     if(s.pos < list.length) return { item: list[s.pos], retry: false };
     const r = s.retry.map(findByKey).filter(Boolean);
     if(r.length) return { item: r[0], retry: true };
-    const passes = skPassCount(s.ch, s.gap);
-    const nxt = passes.find(k => k > s.pass);
+    const nxt = skPassCount().find(k => k > s.pass);
     if(!nxt) return null;
     s.pass = nxt; s.pos = 0; s.retry = [];
     saveProgress();
@@ -1667,13 +1701,100 @@ function skGrade(cur, ok){
   saveProgress();
 }
 
-function skPassChips(){
+/* ---------- timer ---------- */
+function skTimerMs(){
+  const t = skState().timer;
+  return t.acc + (t.start ? Date.now() - t.start : 0);
+}
+function skTimerReset(){
+  const t = skState().timer;
+  t.acc = 0; t.auto = false;
+  t.start = t.on ? Date.now() : null;
+  t.fromStart = t.on;
+}
+function skTimerOn(){
+  const s = skState(), t = s.timer;
+  t.on = true; t.acc = 0; t.start = Date.now(); t.auto = false; t.fromStart = skAtStart();
+  saveProgress();
+}
+function skTimerPause(){
+  const t = skState().timer;
+  if(t.start){ t.acc += Date.now() - t.start; t.start = null; }
+  t.auto = false; saveProgress();
+}
+function skTimerResume(){
+  const t = skState().timer;
+  if(t.on && !t.start){ t.start = Date.now(); t.auto = false; saveProgress(); }
+}
+function skTimerOff(){
+  const t = skState().timer;
+  t.on = false; t.acc = 0; t.start = null; t.auto = false; t.fromStart = false;
+  saveProgress();
+}
+function skFmt(ms){
+  const sec = Math.floor(ms / 1000), h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), ss = sec % 60;
+  const p = n => String(n).padStart(2, '0');
+  return (h ? h + ':' + p(m) + ':' + p(ss) : p(m) + ':' + p(ss)).replace(/[0-9]/g, d => '०१२३४५६७८९'[d]);
+}
+function skTimerHtml(){
+  const t = skState().timer;
+  if(!t.on) return `<div class="sk-timer"><button class="sk-tbtn" id="skTimerOnBtn">⏱ टाइमर चालू करें</button></div>`;
+  const running = !!t.start;
+  return `<div class="sk-timer on">
+      <span class="sk-tval ${running ? '' : 'paused'}" id="skTimerVal">⏱ ${skFmt(skTimerMs())}</span>
+      <button class="sk-tbtn" id="skTimerPauseBtn">${running ? '⏸ रोकें' : '▶ चलाएँ'}</button>
+      <button class="sk-tbtn" id="skTimerOffBtn">■ बंद</button>
+    </div>`;
+}
+function skWireTimer(){
+  const on = document.getElementById('skTimerOnBtn');
+  if(on) on.addEventListener('click', () => { skTimerOn(); renderSankhyaFlow(); });
+  const pb = document.getElementById('skTimerPauseBtn');
+  if(pb) pb.addEventListener('click', () => {
+    if(skState().timer.start) skTimerPause(); else skTimerResume();
+    renderSankhyaFlow();
+  });
+  const ob = document.getElementById('skTimerOffBtn');
+  if(ob) ob.addEventListener('click', () => { skTimerOff(); renderSankhyaFlow(); });
+}
+setInterval(() => {
+  const el = document.getElementById('skTimerVal');
+  if(el && progress.mode === 'sankhya' && skState().timer.start) el.textContent = '⏱ ' + skFmt(skTimerMs());
+}, 1000);
+// count only while the app is on screen
+document.addEventListener('visibilitychange', () => {
+  if(!progress.sankhya) return;
+  const t = skState().timer;
+  if(document.hidden){
+    if(t.on && t.start){ t.acc += Date.now() - t.start; t.start = null; t.auto = true; saveProgress(); }
+  } else if(t.on && t.auto && progress.mode === 'sankhya'){
+    t.start = Date.now(); t.auto = false; saveProgress();
+  }
+});
+// a finished unit: stop the clock once and remember the time
+function skFinishTimer(){
+  const s = skState(), t = s.timer;
+  if(s.result || !t.on) return;
+  if(t.start){ t.acc += Date.now() - t.start; t.start = null; }
+  const ms = t.acc;
+  const key = skUnitKey();
+  const prev = s.times[key] || null;
+  s.result = { ms, full: t.fromStart, prevBest: prev ? prev.best : null };
+  if(t.fromStart){
+    s.times[key] = { best: prev ? Math.min(prev.best, ms) : ms, last: ms, date: todayStr() };
+  }
+  saveProgress();
+}
+
+function skPassChips(cur){
   const s = skState();
-  const list = skPassList(s.ch, s.pass, s.gap);
+  const list = skPassList(s.pass);
+  const ch = cur ? cur.item.c : null;
   return list.map((it, i) => {
+    if(s.flow === 'all' && it.c !== ch) return '';      // whole-Gita flow: show the current chapter's part of the pass
     const key = keyOf(it);
     let cls = 'sk-chip';
-    if(i === s.pos) cls += ' cur';
+    if(!cur.retry && i === s.pos) cls += ' cur';
     else if(s.miss[key] && !s.done[key]) cls += ' miss';
     else if(i < s.pos) cls += ' done';
     return `<span class="${cls}">${toDevanagariNum(it.v)}</span>`;
@@ -1684,18 +1805,24 @@ function skSettingsHtml(){
   const s = skState();
   const gp = g => `<button class="duration-pill ${s.gap === g ? 'active' : ''}" data-skgap="${g}">${toDevanagariNum(g)}</button>`;
   const dp = (v, l) => `<button class="duration-pill ${s.dir === v ? 'active' : ''}" data-skdir="${v}">${l}</button>`;
+  const fp = (v, l) => `<button class="duration-pill ${s.flow === v ? 'active' : ''}" data-skflow="${v}">${l}</button>`;
   const opts = skChapters().map(c => `<option value="${c}" ${c === s.ch ? 'selected' : ''}>अध्याय ${toDevanagariNum(c)} — ${CHAPTER_TITLES[c] || ''}</option>`).join('');
   return `
     <details class="sk-settings" id="skSettings">
-      <summary>⚙ सेटिंग — अंतर ${toDevanagariNum(s.gap)} · ${s.dir === 'num' ? 'संख्या → श्लोक' : s.dir === 'verse' ? 'श्लोक → संख्या' : 'बारी-बारी'}</summary>
+      <summary>⚙ सेटिंग — ${s.flow === 'all' ? 'पूरी गीता' : 'अध्याय-वार'} · अंतर ${toDevanagariNum(s.gap)} · ${s.dir === 'num' ? 'संख्या → श्लोक' : s.dir === 'verse' ? 'श्लोक → संख्या' : 'बारी-बारी'}</summary>
+      <div class="mcq-diff-label">प्रवाह</div>
+      <div class="duration-pills">${fp('chapter', 'अध्याय-दर-अध्याय')}${fp('all', 'पूरी गीता एक साथ')}</div>
+      <div class="sk-note">${s.flow === 'all'
+        ? 'चक्र १ में हर अध्याय के श्लोक १, ' + toDevanagariNum(1 + s.gap) + ', ' + toDevanagariNum(1 + 2 * s.gap) + ' … (अध्याय १ से अंत तक), फिर चक्र २ में सबके २, ' + toDevanagariNum(2 + s.gap) + ' … — ऊपर के अध्याय-चयन के सभी अध्याय एक प्रवाह में।'
+        : 'एक अध्याय के सारे चक्र पूरे होने पर अगला अध्याय।'}</div>
       <div class="mcq-diff-label">श्लोकों के बीच अंतर (चक्र)</div>
       <div class="duration-pills">${SK_GAPS.map(gp).join('')}</div>
       <div class="sk-note">अंतर ${toDevanagariNum(s.gap)}: चक्र १ में १, ${toDevanagariNum(1 + s.gap)}, ${toDevanagariNum(1 + 2 * s.gap)} …; चक्र २ में २, ${toDevanagariNum(2 + s.gap)}, ${toDevanagariNum(2 + 2 * s.gap)} … — ${toDevanagariNum(s.gap)} चक्रों में हर श्लोक एक बार।</div>
       <div class="mcq-diff-label">अभ्यास की दिशा</div>
       <div class="duration-pills">${dp('num', 'संख्या → श्लोक')}${dp('verse', 'श्लोक → संख्या')}${dp('both', 'बारी-बारी')}</div>
-      <div class="mcq-diff-label">अध्याय पर जाएँ</div>
-      <select class="sk-select" id="skChSel">${opts}</select>
-      <button class="btn btn-secondary sk-small" id="skRestartBtn">इस अध्याय को फिर से आरम्भ करें</button>
+      ${s.flow === 'chapter' ? `<div class="mcq-diff-label">अध्याय पर जाएँ</div>
+      <select class="sk-select" id="skChSel">${opts}</select>` : ''}
+      <button class="btn btn-secondary sk-small" id="skRestartBtn">${s.flow === 'all' ? 'पूरी गीता का प्रवाह फिर से आरम्भ करें' : 'इस अध्याय को फिर से आरम्भ करें'}</button>
     </details>`;
 }
 
@@ -1704,19 +1831,32 @@ function skWireSettings(){
   const det = document.getElementById('skSettings');
   if(det && skSettingsOpen) det.open = true;
   if(det) det.addEventListener('toggle', () => { skSettingsOpen = det.open; });
+  const restartAsk = (msg, fn) => { if(skAtStart() || s.result) fn(); else showConfirmModal(msg, fn); };
+  document.querySelectorAll('[data-skflow]').forEach(b => b.addEventListener('click', () => {
+    const f = b.dataset.skflow;
+    if(f === s.flow) return;
+    restartAsk('प्रवाह बदलने पर अभ्यास नए सिरे से आरम्भ होगा।', () => {
+      s.flow = f;
+      skStartUnit(f === 'chapter' ? (s.ch || skChapters()[0]) : null);
+      renderSankhyaFlow();
+    });
+  }));
   document.querySelectorAll('[data-skgap]').forEach(b => b.addEventListener('click', () => {
     const g = parseInt(b.dataset.skgap);
     if(g === s.gap) return;
-    s.gap = g; skStartChapter(s.ch); renderSankhyaFlow();
+    restartAsk('अंतर बदलने पर ' + skUnitName() + ' का अभ्यास पहले चक्र से आरम्भ होगा।', () => {
+      s.gap = g; skStartUnit(); renderSankhyaFlow();
+    });
   }));
   document.querySelectorAll('[data-skdir]').forEach(b => b.addEventListener('click', () => {
     s.dir = b.dataset.skdir; s.phase = 'ask'; s.ans = null; saveProgress(); renderSankhyaFlow();
   }));
   const sel = document.getElementById('skChSel');
-  if(sel) sel.addEventListener('change', () => { skStartChapter(parseInt(sel.value)); renderSankhyaFlow(); });
+  if(sel) sel.addEventListener('change', () => { skStartUnit(parseInt(sel.value)); renderSankhyaFlow(); });
   const rb = document.getElementById('skRestartBtn');
-  if(rb) rb.addEventListener('click', () => showConfirmModal('इस अध्याय का संख्या-क्रम अभ्यास पहले चक्र से फिर आरम्भ होगा।',
-    () => { skStartChapter(s.ch); renderSankhyaFlow(); }));
+  if(rb) rb.addEventListener('click', () => showConfirmModal(skUnitName() + ' का संख्या-क्रम अभ्यास पहले चक्र से फिर आरम्भ होगा।',
+    () => { skStartUnit(); renderSankhyaFlow(); }));
+  skWireTimer();
 }
 
 function skParseNum(t){
@@ -1732,19 +1872,23 @@ function renderSankhyaFlow(){
     return;
   }
   const s = skState();
+  // timer paused automatically when the app was left resumes when the mode is shown again
+  if(s.timer.on && s.timer.auto && !document.hidden){ s.timer.start = Date.now(); s.timer.auto = false; saveProgress(); }
   const cur = skCurrent();
   if(!cur){ renderSankhyaChapterDone(); return; }
   const item = cur.item;
-  const passes = skPassCount(s.ch, s.gap);
-  const list = skPassList(s.ch, s.pass, s.gap);
+  const passes = skPassCount();
+  const list = skPassList(s.pass);
   const passNo = passes.indexOf(s.pass) + 1;
   const where = cur.retry
     ? `दोहराव · शेष ${toDevanagariNum(s.retry.length)}`
     : `${toDevanagariNum(s.pos + 1)}/${toDevanagariNum(list.length)}`;
+  const unit = s.flow === 'all' ? `पूरी गीता · अध्याय ${toDevanagariNum(item.c)}` : `अध्याय ${toDevanagariNum(s.ch)}`;
   const head = `
     ${skSettingsHtml()}
-    <div class="prompt-eyebrow">संख्या-क्रम · अध्याय ${toDevanagariNum(s.ch)} · चक्र ${toDevanagariNum(passNo)}/${toDevanagariNum(passes.length)} · ${where}</div>
-    <div class="sk-chips">${skPassChips()}</div>`;
+    ${skTimerHtml()}
+    <div class="prompt-eyebrow">संख्या-क्रम · ${unit} · चक्र ${toDevanagariNum(passNo)}/${toDevanagariNum(passes.length)} · ${where}</div>
+    <div class="sk-chips">${skPassChips(cur)}</div>`;
   const dir = s.phase === 'ask' ? skDirFor() : s.ansDir;
   s.ansDir = dir;
 
@@ -1807,28 +1951,45 @@ function renderSankhyaFlow(){
 
 function renderSankhyaChapterDone(){
   const s = skState();
+  skFinishTimer();
   const card = document.getElementById('mainCard');
-  const total = skChapterVerses(s.ch).length;
+  const total = skUnitVerses().length;
   const missed = Object.keys(s.miss).length;
   const chs = skChapters();
-  const next = chs.find(c => c > s.ch);
+  const isAll = s.flow === 'all';
+  const next = isAll ? null : chs.find(c => c > s.ch);
+  let timeHtml = '';
+  if(s.result){
+    const r = s.result;
+    const avg = total ? Math.round(r.ms / 1000 / total) : 0;
+    const best = s.times[skUnitKey()];
+    const newBest = r.full && (r.prevBest === null || r.ms <= r.prevBest);
+    timeHtml = `<div class="sk-time-result">
+        <div class="sk-time-big">⏱ ${skFmt(r.ms)}</div>
+        <div class="sk-note">औसत ${toDevanagariNum(avg)} सेकंड प्रति श्लोक${r.full ? '' : ' · (टाइमर बीच में चालू हुआ था)'}</div>
+        ${r.full ? (newBest ? (r.prevBest !== null ? `<div class="sk-note sk-best">🏆 नया सर्वश्रेष्ठ समय! (पिछला ${skFmt(r.prevBest)})</div>` : `<div class="sk-note">यह इस ${isAll ? 'प्रवाह' : 'अध्याय'} का पहला दर्ज समय है।</div>`)
+                 : `<div class="sk-note">सर्वश्रेष्ठ समय: ${skFmt(best.best)}</div>`) : ''}
+      </div>`;
+  }
   card.innerHTML = skSettingsHtml() + `
     <div class="prompt-eyebrow">संख्या-क्रम</div>
-    <h2 class="sk-done-title">अध्याय ${toDevanagariNum(s.ch)} पूर्ण हुआ!</h2>
+    <h2 class="sk-done-title">${isAll ? 'पूरी गीता का प्रवाह पूर्ण हुआ! 🙏' : 'अध्याय ' + toDevanagariNum(s.ch) + ' पूर्ण हुआ!'}</h2>
+    ${timeHtml}
     <div class="srs-counts">
       <div class="result-stat"><span class="stat-value">${toDevanagariNum(total)}</span><span class="stat-label">श्लोक</span></div>
       <div class="result-stat"><span class="stat-value">${toDevanagariNum(total - missed)}</span><span class="stat-label">पहली बार में सही</span></div>
       <div class="result-stat"><span class="stat-value">${toDevanagariNum(missed)}</span><span class="stat-label">दोहराने पड़े</span></div>
     </div>
-    ${missed ? `<div class="sk-note">दोहराए गए श्लोक: ${Object.keys(s.miss).map(k => toDevanagariNum(k.split('-')[1])).join(', ')} — ये "कठिन" सूची में हैं।</div>` : ''}
-    ${next ? `<button class="btn btn-primary" id="skNextChBtn">अगला अध्याय (${toDevanagariNum(next)}) आरम्भ करें</button>`
-           : `<div class="recall-hint">चयनित सभी अध्याय पूरे हुए। 🙏</div><button class="btn btn-primary" id="skFirstChBtn">फिर से अध्याय ${toDevanagariNum(chs[0])} से आरम्भ करें</button>`}
-    <button class="btn btn-secondary" id="skAgainBtn">यही अध्याय फिर से करें</button>`;
+    ${missed ? `<div class="sk-note">दोहराए गए श्लोक: ${Object.keys(s.miss).map(k => isAll ? k.split('-').map(Number).map(toDevanagariNum).join('.') : toDevanagariNum(k.split('-')[1])).join(', ')} — ये "कठिन" सूची में हैं।</div>` : ''}
+    ${isAll ? `<button class="btn btn-primary" id="skAgainBtn">पूरी गीता फिर से आरम्भ करें</button>`
+      : (next ? `<button class="btn btn-primary" id="skNextChBtn">अगला अध्याय (${toDevanagariNum(next)}) आरम्भ करें</button>`
+              : `<div class="recall-hint">चयनित सभी अध्याय पूरे हुए। 🙏</div><button class="btn btn-primary" id="skFirstChBtn">फिर से अध्याय ${toDevanagariNum(chs[0])} से आरम्भ करें</button>`)
+        + `<button class="btn btn-secondary" id="skAgainBtn">यही अध्याय फिर से करें</button>`}`;
   const nb = document.getElementById('skNextChBtn');
-  if(nb) nb.addEventListener('click', () => { skStartChapter(next); renderSankhyaFlow(); });
+  if(nb) nb.addEventListener('click', () => { skStartUnit(next); renderSankhyaFlow(); });
   const fb = document.getElementById('skFirstChBtn');
-  if(fb) fb.addEventListener('click', () => { skStartChapter(chs[0]); renderSankhyaFlow(); });
-  document.getElementById('skAgainBtn').addEventListener('click', () => { skStartChapter(s.ch); renderSankhyaFlow(); });
+  if(fb) fb.addEventListener('click', () => { skStartUnit(chs[0]); renderSankhyaFlow(); });
+  document.getElementById('skAgainBtn').addEventListener('click', () => { skStartUnit(); renderSankhyaFlow(); });
   skWireSettings();
 }
 
