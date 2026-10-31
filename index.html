@@ -761,6 +761,38 @@ footer.note{
 @media (min-width:600px){
   .card{ padding:40px 44px 34px; }
 }
+
+/* ===== एक-स्क्रीन लेआउट: पूरी ऐप फ़ोन की ऊँचाई में, पृष्ठ स्क्रॉल नहीं; लंबा पाठ अपने डिब्बे में स्क्रॉल ===== */
+html, body{ height:100%; overflow:hidden; }
+body{ padding:0; min-height:0; display:block; }
+.wrap{ max-width:640px; margin:0 auto; height:100vh; height:100dvh; box-sizing:border-box; display:flex; flex-direction:column;
+  padding:calc(6px + env(safe-area-inset-top)) 10px calc(8px + env(safe-area-inset-bottom)); }
+.wrap > *{ flex-shrink:0; }
+header.top{ display:flex; align-items:center; justify-content:space-between; text-align:left; margin:0 0 6px; }
+header.top h1{ font-size:18px; margin:0; display:flex; align-items:center; gap:6px; }
+header.top .om{ font-size:18px; letter-spacing:0; }
+header.top .font-controls{ margin-left:0; }
+header.top .util-btn{ padding:4px 11px; font-size:13px; }
+.progress-card{ padding:6px 12px; margin-bottom:6px; gap:10px; border-radius:10px; }
+.scope-bar{ margin-bottom:6px; gap:6px; }
+.scope-summary{ padding:7px 10px; font-size:12.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.hard-filter-chip{ padding:7px 10px; font-size:12.5px; }
+.mode-toggle{ gap:5px; margin-bottom:8px; }
+.mode-pill{ flex:1 1 calc(25% - 5px); min-width:0; padding:7px 2px; font-size:12px; border-radius:9px; }
+#mainCard, #khojRoot, #anvayaRoot{ flex:1 1 auto; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; overscroll-behavior:contain; }
+#khojRoot, #anvayaRoot{ margin-top:0; }
+.card{ padding:14px 14px 14px; border-radius:14px; }
+.prompt-eyebrow{ margin-bottom:6px; letter-spacing:1px; }
+.verse-ref{ font-size:clamp(32px,9vw,44px); margin:2px 0 2px; }
+.recall-hint{ margin:6px 0 12px; font-size:13.5px; }
+.btn{ padding:12px 16px; }
+.btn + .btn{ margin-top:8px; }
+.sk-row .btn, .sk-row .btn + .btn{ margin-top:0; }
+.btn-secondary{ margin-top:8px; }
+.sk-settings{ margin:0 0 8px; padding:6px 10px; }
+.sk-chips{ margin:2px 0 8px; gap:4px; }
+.sk-chip{ font-size:13px; padding:2px 5px; min-width:26px; }
+.hint-line{ margin:4px 0 2px; }
 </style>
 <style id="kjStyle">
 /* ===== शब्द-खोज (concordance) — scoped under #khojRoot ===== */
@@ -868,22 +900,17 @@ footer.note{
 <body>
 <div class="wrap">
   <header class="top">
-    <div class="om">ॐ</div>
-    <h1>भगवद्गीता कण्ठस्थ परीक्षा</h1>
-    <div class="subtitle">श्लोक क्रमांक स्मरण परीक्षा · अठारह अध्याय · 700 श्लोक</div>
+    <h1><span class="om">ॐ</span> गीता कण्ठस्थ</h1>
+    <div class="font-controls">
+      <button class="util-btn" id="fontMinusBtn">अ−</button>
+      <button class="util-btn" id="fontPlusBtn">अ+</button>
+    </div>
   </header>
 
   <div class="progress-card" id="progressCard">
     <div class="progress-label" id="progressLabel">0 / 700</div>
     <div class="progress-bar-track"><div class="progress-bar-fill" id="progressFill"></div></div>
     <div class="progress-label" id="roundLabel">चक्र 1</div>
-  </div>
-
-  <div class="util-bar">
-    <div class="font-controls">
-      <button class="util-btn" id="fontMinusBtn">अ−</button>
-      <button class="util-btn" id="fontPlusBtn">अ+</button>
-    </div>
   </div>
 
   <div class="scope-bar" id="scopeBar">
@@ -1055,7 +1082,7 @@ footer.note{
   </section>
 </div>
 
-  <footer class="note">
+  <footer class="note" style="display:none">
     प्रगति इस उपकरण में स्थानीय रूप से सहेजी जाती है। "रीसेट" दबाकर आप पुनः आरंभ कर सकते हैं।
   </footer>
 </div>
